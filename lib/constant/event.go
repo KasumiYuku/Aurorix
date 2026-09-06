@@ -11,14 +11,3 @@ const (
 	MESSAGE_AUDIT_PASS      EventType = "MESSAGE_AUDIT_PASS"
 	MESSAGE_AUDIT_REJECT    EventType = "MESSAGE_AUDIT_REJECT"
 )
-
-func IsValidEventType(s string) bool {
-	switch EventType(s) {
-	case INTERACTION_CREATE, C2C_MESSAGE_CREATE, GROUP_AT_MESSAGE_CREATE,
-		GROUP_MESSAGE_CREATE, GROUP_JOIN_REQUEST,
-		MESSAGE_AUDIT_PASS, MESSAGE_AUDIT_REJECT:
-		return true
-	default:
-		return false
-	}
-}

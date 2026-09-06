@@ -1,8 +1,8 @@
 package context
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/constant"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/requests"
 	"Plrx/lib/storage"
 )
@@ -18,7 +18,7 @@ type Context struct {
 }
 
 // Init 初始化 Context 与 MessageManager。
-func (context *Context) Init(messageId, eventId string, qqapi *qqapi.Client) {
+func (context *Context) Init(messageId, eventId string, qqapi *api.BotAPI) {
 	context.MessageManager = &MessageManager{
 		MessageId: messageId,
 		EventId:   eventId,

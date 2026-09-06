@@ -1,8 +1,8 @@
 package message
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/assets"
-	"Plrx/lib/qqapi"
 	"encoding/json"
 	"os"
 	"path"
@@ -54,8 +54,8 @@ func (msg *UploadMessage) Send() error {
 }
 
 // MediaUploadFor 构造 QQ 上传参数：公网 URL 直传，本地/data/base64/字节走智能解码。
-func MediaUploadFor(fileType int, src any, name string) qqapi.MediaUpload {
-	up := qqapi.MediaUpload{FileType: fileType, Filename: name}
+func MediaUploadFor(fileType int, src any, name string) api.MediaUpload {
+	up := api.MediaUpload{FileType: fileType, Filename: name}
 	if up.Filename == "" {
 		up.Filename = mediaName(fileType, src)
 	}

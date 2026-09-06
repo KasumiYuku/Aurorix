@@ -1,9 +1,9 @@
 package message
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/constant"
 	"Plrx/lib/contract"
-	"Plrx/lib/qqapi"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -16,7 +16,7 @@ type Message struct {
 	EventId          string                 `json:"event_id,omitempty"`
 	Type             constant.MessageType   `json:"msg_type"`
 	Reference        *MessageReference      `json:"message_reference,omitempty"`
-	Qapi             *qqapi.Client          `json:"-"`
+	Qapi             *api.BotAPI            `json:"-"`
 	GroupId          string                 `json:"-"`
 	UserId           string                 `json:"-"`
 	Target           constant.MessageOrigin `json:"-"` // 发送目标(私聊/群)

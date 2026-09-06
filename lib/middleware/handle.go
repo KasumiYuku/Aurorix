@@ -1,14 +1,15 @@
 package middleware
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/buttons"
 	"Plrx/lib/constant"
 	"Plrx/lib/context"
+	"Plrx/lib/event"
 	"Plrx/lib/logx"
 	"Plrx/lib/message"
 	"Plrx/lib/parser"
 	"Plrx/lib/plugin"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/state"
 	"Plrx/lib/structers"
 	"Plrx/lib/templates"
@@ -18,6 +19,11 @@ import (
 )
 
 var messageLog = logx.New("message")
+
+func init() {
+	event.SetBuiltinHook(ProcessPayload)
+	event.SetTaskScheduler(func(f func()) { pool.Go(f) })
+}
 
 // commandDispatchOpts 群消息与私聊两条分发路径的差异参数
 type commandDispatchOpts struct {
@@ -30,7 +36,7 @@ type commandDispatchOpts struct {
 }
 
 // dispatchCommand 指令解析与分发: 三态智能匹配 + 树路由 + kong 参数解析。
-func dispatchCommand(payload structers.Payload, client *qqapi.Client, opts commandDispatchOpts) {
+func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts commandDispatchOpts) {
 	tokens := strings.Fields(payload.Data.Content)
 	if len(tokens) == 0 {
 		return
@@ -162,7 +168,7 @@ func quotedArgs(s string) string {
 	return s[i+1 : j]
 }
 
-func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
+func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 	switch payload.EventType {
 	case constant.GROUP_AT_MESSAGE_CREATE, constant.GROUP_MESSAGE_CREATE:
 		state.IncRecv()
@@ -243,7 +249,7 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 		return
 	case constant.MESSAGE_AUDIT_PASS, constant.MESSAGE_AUDIT_REJECT:
 		// 消息审计结果：resolve 等待中的发送方
-		qqapi.ResolveAudit(payload.Data.AuditID, payload.Data.MessageId, payload.EventType == constant.MESSAGE_AUDIT_PASS)
+		api.ResolveAudit(payload.Data.AuditID, payload.Data.MessageId, payload.EventType == constant.MESSAGE_AUDIT_PASS)
 		return
 	}
 }

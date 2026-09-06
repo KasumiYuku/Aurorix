@@ -228,6 +228,16 @@ func (mp *Multipart) Size() int64 { return mp.size }
 
 func (mp *Multipart) writer() *multipart.Writer { return multipart.NewWriter(&mp.buf) }
 
+// StatusError 非 2xx 响应错误, 携带状态码供上层策略判断。
+type StatusError struct {
+	Code int
+	Body []byte
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("unexpected status code: %d, body: %s", e.Code, e.Body)
+}
+
 func isRetryableStatus(code int) bool {
 	return code == http.StatusRequestTimeout ||
 		code == http.StatusTooManyRequests ||
@@ -288,7 +298,7 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			lastErr = fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
+			lastErr = &StatusError{Code: resp.StatusCode, Body: respBody}
 			if isRetryableStatus(resp.StatusCode) {
 				continue
 			}

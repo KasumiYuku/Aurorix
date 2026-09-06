@@ -1,7 +1,7 @@
 package context
 
 import (
-	"Plrx/lib/qqapi"
+	"Plrx/lib/api"
 	"time"
 )
 
@@ -13,7 +13,7 @@ type ScheduleContext struct {
 	FiredAt  time.Time
 }
 
-func (ctx *ScheduleContext) Init(client *qqapi.Client) {
+func (ctx *ScheduleContext) Init(client *api.BotAPI) {
 	ctx.Context = &Context{}
 	ctx.Context.Init("", "", client)
 	ctx.FiredAt = time.Now()

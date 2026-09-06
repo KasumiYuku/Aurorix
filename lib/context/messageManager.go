@@ -1,9 +1,9 @@
 package context
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/constant"
 	"Plrx/lib/message"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/templates"
 )
 
@@ -18,7 +18,7 @@ type MessageManager struct {
 	GroupId   string
 	UserId    string
 	Target    constant.MessageOrigin
-	Qapi      *qqapi.Client
+	Qapi      *api.BotAPI
 	ref       *message.MsgRef
 }
 

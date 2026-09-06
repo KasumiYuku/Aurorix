@@ -9,3 +9,16 @@ web/node_modules/
 polarix
 Plrx
 lib/admin/dist/
+
+# 插件:官方示例入库, 个人/生态插件目录永不追踪
+plugins/*
+!plugins/bind/
+!plugins/echo/
+!plugins/imagegen/
+!plugins/uptime/
+
+# markdown:现有文档入库,新增默认忽略
+*.md
+!README.md
+!docs/*.md
+!templates/markdown/*.md

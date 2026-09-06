@@ -2,9 +2,9 @@
 package admin
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/assets"
 	"Plrx/lib/config"
-	"Plrx/lib/qqapi"
 	"embed"
 	"io/fs"
 	"net"
@@ -22,7 +22,7 @@ var distFS embed.FS
 // Deps 管理台依赖。
 type Deps struct {
 	Assets  *assets.Manager // 可为 nil, 为 nil 时图床接口不可用
-	Client  *qqapi.Client   // 热更消息选项用
+	Client  *api.BotAPI     // 热更消息选项用
 	Gateway func() any      // websocket 模式的网关状态; webhook 传 nil
 	Control Control
 }

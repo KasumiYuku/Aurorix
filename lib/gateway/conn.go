@@ -11,8 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"Plrx/lib/constant"
-
 	"github.com/gorilla/websocket"
 )
 
@@ -186,7 +184,8 @@ func (w *conn) onDispatch(f frame) {
 		logger.Infof("会话恢复成功")
 	}
 	w.c.bumpSeq(f.S)
-	if !constant.IsValidEventType(f.T) {
+	// 系统事件不外泄, 其余(含未知)全进事件总线
+	if f.T == "READY" || f.T == "RESUMED" {
 		return
 	}
 	w.c.dispatch(f)

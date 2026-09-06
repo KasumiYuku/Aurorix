@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"Plrx/lib/api"
 	"Plrx/lib/constant"
 	"Plrx/lib/logx"
 	"Plrx/lib/middleware"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/structers"
 
 	"github.com/gorilla/websocket"
@@ -54,7 +54,7 @@ type frame struct {
 
 // Client WebSocket 网关客户端。
 type Client struct {
-	api        *qqapi.Client
+	api        *api.BotAPI
 	gatewayURL string
 	intents    int
 	shard      [2]int
@@ -79,7 +79,7 @@ type Client struct {
 }
 
 // New 创建网关客户端。
-func New(api *qqapi.Client, gatewayURL string, intents int, shard [2]int) *Client {
+func New(api *api.BotAPI, gatewayURL string, intents int, shard [2]int) *Client {
 	if shard[0] == 0 && shard[1] == 0 {
 		shard = [2]int{0, 1}
 	}
@@ -248,6 +248,7 @@ func (c *Client) dispatch(f frame) {
 		EventType: constant.EventType(f.T),
 	}
 	if len(f.D) > 0 {
+		payload.RawEvent = f.D
 		if err := json.Unmarshal(f.D, &payload.Data); err != nil {
 			logger.Errorf("解析事件数据失败 %s: %v", f.T, err)
 			return

@@ -1,4 +1,4 @@
-.PHONY: check test vet fmt build clean web
+.PHONY: check test vet fmt build run web clean install
 
 check: fmt vet test build
 
@@ -21,6 +21,14 @@ test:
 build:
 	@echo "[build]"
 	go build -o /dev/null .
+
+run:
+	@echo "[run]"
+	go run .
+
+install:
+	@echo "[install]"
+	go install ./tools/plrx
 
 web:
 	@echo "[web]"

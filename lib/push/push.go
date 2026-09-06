@@ -1,11 +1,12 @@
+// Package push 框架内置主动推送服务: 管理推送开关/密钥的指令 + 外部 HTTP 推送端点。
 package push
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/constant"
 	"Plrx/lib/context"
 	"Plrx/lib/logx"
 	"Plrx/lib/plugin"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/storage"
 	"crypto/subtle"
 	"encoding/json"
@@ -36,7 +37,7 @@ const (
 
 var (
 	clientMu sync.RWMutex
-	client   *qqapi.Client
+	client   *api.BotAPI
 
 	rateMu    sync.Mutex
 	rateCount int
@@ -56,7 +57,7 @@ func pushRateLimited() bool {
 	return rateCount > rateLimitMax
 }
 
-func SetClient(c *qqapi.Client) {
+func SetClient(c *api.BotAPI) {
 	clientMu.Lock()
 	defer clientMu.Unlock()
 	client = c
@@ -66,7 +67,9 @@ type pushKeyArgs struct {
 	Key string `kong:"arg,name='key',help='推送密钥'"`
 }
 
-func init() {
+// Init 注入 BotAPI 并注册推送管理指令, 启动时调用一次。
+func Init(bot *api.BotAPI) {
+	SetClient(bot)
 	plugin.Register(&plugin.Plugin{
 		Id: pluginID,
 		Commands: []*plugin.Command{

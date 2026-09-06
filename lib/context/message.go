@@ -1,8 +1,8 @@
 package context
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/message"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/structers"
 )
 
@@ -20,7 +20,7 @@ type MessageContext struct {
 	AvatarURL       string              // 发送者头像
 }
 
-func (ctx *MessageContext) Init(messageId, eventId string, client *qqapi.Client) {
+func (ctx *MessageContext) Init(messageId, eventId string, client *api.BotAPI) {
 	ctx.Context = &Context{}
 	ctx.Context.Init(messageId, eventId, client)
 }

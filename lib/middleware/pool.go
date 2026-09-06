@@ -1,8 +1,9 @@
 package middleware
 
 import (
+	"Plrx/lib/api"
+	"Plrx/lib/event"
 	"Plrx/lib/logx"
-	"Plrx/lib/qqapi"
 	"Plrx/lib/structers"
 	"sync/atomic"
 	"time"
@@ -70,6 +71,7 @@ func (p *taskPool) exec(f func()) {
 }
 
 // ProcessAsync 异步处理事件, 网关与 webhook 共用。
-func ProcessAsync(payload structers.Payload, client *qqapi.Client) {
-	pool.Go(func() { ProcessPayload(payload, client) })
+// 事件经 event.Ingest 进订阅总线与内置分发, 保持不阻塞读循环的语义。
+func ProcessAsync(payload structers.Payload, client *api.BotAPI) {
+	pool.Go(func() { event.Ingest(payload, client) })
 }

@@ -3,6 +3,7 @@ package structers
 import (
 	"Plrx/lib/constant"
 	"Plrx/lib/message"
+	"encoding/json"
 )
 
 // 推送内容解析
@@ -12,6 +13,7 @@ type Payload struct {
 	Data      PrasedData         `json:"d"`
 	T         string             `json:"t"`
 	EventType constant.EventType `json:"-"`
+	RawEvent  json.RawMessage    `json:"-"` // 平台原始事件载荷(d), 未知事件透传用
 }
 
 type CallbackData struct {

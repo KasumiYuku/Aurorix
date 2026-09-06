@@ -27,7 +27,7 @@ func (m *Manager) WithPath(path string) *Manager {
 	return m
 }
 
-// OnReload 注册聚合器重建回调，保存配置后触发，用于注入 qqapi.Client.SetAssets。
+// OnReload 注册聚合器重建回调，保存配置后触发，用于注入 api.BotAPI.SetAssets。
 func (m *Manager) OnReload(fn func(*ImageHost)) {
 	m.mu.Lock()
 	m.onReload = fn

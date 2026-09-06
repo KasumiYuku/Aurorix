@@ -1,6 +1,6 @@
 package context
 
-import "Plrx/lib/qqapi"
+import "Plrx/lib/api"
 
 // 按钮回调上下文
 type CallbackContext struct {
@@ -11,7 +11,7 @@ type CallbackContext struct {
 	InteractionID string // 平台交互 ID（事件 d.id），回执专用
 }
 
-func (ctx *CallbackContext) Init(eventId string, client *qqapi.Client) {
+func (ctx *CallbackContext) Init(eventId string, client *api.BotAPI) {
 	ctx.Context = &Context{}
 	ctx.Context.Init("", eventId, client)
 }

@@ -1,11 +1,11 @@
 package schedule
 
 import (
+	"Plrx/lib/api"
 	"Plrx/lib/constant"
 	"Plrx/lib/context"
 	"Plrx/lib/logx"
 	"Plrx/lib/plugin"
-	"Plrx/lib/qqapi"
 	"sync"
 	"time"
 )
@@ -48,7 +48,7 @@ func (rj *registeredJob) stop() {
 var (
 	jobs       []*registeredJob
 	jobsLock   sync.RWMutex
-	client     *qqapi.Client
+	client     *api.BotAPI
 	stopCh     chan struct{}
 	started    bool
 	cronLoopOn bool
@@ -213,7 +213,7 @@ func GetJobCount() int {
 }
 
 // Start 启动调度器 (main 中在 qqapi 初始化后调用)
-func Start(c *qqapi.Client) {
+func Start(c *api.BotAPI) {
 	startMu.Lock()
 	defer startMu.Unlock()
 	if started {
@@ -221,7 +221,7 @@ func Start(c *qqapi.Client) {
 		return
 	}
 	if c == nil {
-		logger.Errorf("无法启动: qqapi.Client 为空")
+		logger.Errorf("无法启动: api.BotAPI 为空")
 		return
 	}
 	client = c
