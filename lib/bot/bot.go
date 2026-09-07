@@ -24,9 +24,11 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/requests"
 	"github.com/KasumiYuku/Aurorix/lib/schedule"
 	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/stats"
 	"github.com/KasumiYuku/Aurorix/lib/storage"
 	"github.com/KasumiYuku/Aurorix/lib/structers"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -37,8 +39,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -107,6 +107,19 @@ func Run() {
 	schedule.Start(client)
 	state.Boot(appConfig.Protocol, int(appConfig.Port))
 
+	// 统计持久化: 启动装载历史, 后台批量落库
+	if err := stats.Start(); err != nil {
+		logger.Warnf("统计启动失败(数据不落库): %v", err)
+	}
+
+	// 机器人档案: 启动拉取一次, 失败降级不阻塞
+	profile := admin.NewProfileStore(client)
+	if err := profile.Refresh(); err != nil {
+		logger.Warnf("获取机器人档案失败: %v", err)
+	} else if p := profile.Get(); p != nil {
+		logger.Infof("机器人档案: %v (%v)", p.Username, p.ID)
+	}
+
 	// 运行控制通道, 首条指令生效, 防重复触发
 	opCh := make(chan runOp, 1)
 	var controlOnce atomic.Bool
@@ -116,12 +129,12 @@ func Run() {
 		}
 	}
 
-	engine := gin.New()
-	engine.Use(gin.Recovery())
+	mux := http.NewServeMux()
 	var gw *gateway.Client // websocket 模式在下方赋值, 探针闭包按请求时读取
-	admin.Register(engine, admin.Deps{
-		Assets: assetsManager,
-		Client: client,
+	admin.Register(mux, admin.Deps{
+		Assets:  assetsManager,
+		Client:  client,
+		Profile: profile,
 		Gateway: func() any {
 			if gw != nil {
 				return gw.Status()
@@ -133,7 +146,7 @@ func Run() {
 			Stop:    func() { queue(opStop) },
 		},
 	})
-	engine.POST("/push/:scope/:openid", push.HTTPHandle)
+	mux.HandleFunc("POST /push/{scope}/{openid}", push.HTTPHandle)
 
 	if appConfig.Protocol == "websocket" {
 		gatewayURL, err := client.GatewayURL()
@@ -142,19 +155,19 @@ func Run() {
 			os.Exit(1)
 		}
 		intents := gateway.Intents(appConfig.Intents)
-		gw = gateway.New(client, gatewayURL, intents, [2]int{0, 1})
+		gw = gateway.New(client, gatewayURL, intents)
 		go gw.Start()
 	} else {
 		// 仅 webhook 需要QQ签名校验
-		webhook := engine.Group("/")
-		webhook.Use(middleware.VerifySignature(appConfig.AppSecret))
-		webhook.POST("/webhook", webhookHandler(client, appConfig))
+		mux.Handle("/webhook", middleware.VerifySignature(appConfig.AppSecret)(webhookHandler(client, appConfig)))
 	}
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", appConfig.Port),
-		Handler:           engine,
+		Handler:           recoverHTTP(mux),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	logger.Infof("管理台: http://127.0.0.1:%d/admin", appConfig.Port)
@@ -184,10 +197,10 @@ func Run() {
 }
 
 // webhookHandler QQ 回调入口。
-func webhookHandler(client *api.BotAPI, appConfig config.AppConfig) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Status(http.StatusOK)
-		body, err := c.GetRawData()
+func webhookHandler(client *api.BotAPI, appConfig config.AppConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			return
 		}
@@ -210,7 +223,7 @@ func webhookHandler(client *api.BotAPI, appConfig config.AppConfig) gin.HandlerF
 			msg.WriteString(payload.Data.PlainToken)
 
 			signature := hex.EncodeToString(ed25519.Sign(privateKey, msg.Bytes()))
-			c.JSON(http.StatusOK, gin.H{
+			writeJSON(w, http.StatusOK, map[string]string{
 				"plain_token": payload.Data.PlainToken,
 				"signature":   signature,
 			})
@@ -225,6 +238,27 @@ func webhookHandler(client *api.BotAPI, appConfig config.AppConfig) gin.HandlerF
 	}
 }
 
+// writeJSON 写 JSON 响应。
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+// recoverHTTP panic 恢复包装: 记录日志并回 500, 已写头时仅记录。
+func recoverHTTP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Errorf("HTTP handler panic: %v", rec)
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 // shutdown 优雅退出; restart 为真时重新拉起自身。
 func shutdown(srv *http.Server, gw *gateway.Client, restart bool) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -236,6 +270,7 @@ func shutdown(srv *http.Server, gw *gateway.Client, restart bool) {
 		gw.Stop()
 	}
 	schedule.Stop()
+	stats.Stop() // 兜底落库, 再关数据库
 	if err := storage.Close(); err != nil {
 		logger.Warnf("SQLite 关闭失败: %v", err)
 	}

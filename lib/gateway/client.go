@@ -57,7 +57,6 @@ type Client struct {
 	api        *api.BotAPI
 	gatewayURL string
 	intents    int
-	shard      [2]int
 
 	backoff time.Duration // 新连接退避基数, 瞬时失败逐次翻倍
 
@@ -79,16 +78,12 @@ type Client struct {
 }
 
 // New 创建网关客户端。
-func New(api *api.BotAPI, gatewayURL string, intents int, shard [2]int) *Client {
-	if shard[0] == 0 && shard[1] == 0 {
-		shard = [2]int{0, 1}
-	}
+func New(api *api.BotAPI, gatewayURL string, intents int) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
 		api:        api,
 		gatewayURL: gatewayURL,
 		intents:    intents,
-		shard:      shard,
 		backoff:    time.Second,
 		stop:       make(chan struct{}),
 		stopCtx:    ctx,
@@ -250,8 +245,8 @@ func (c *Client) dispatch(f frame) {
 	if len(f.D) > 0 {
 		payload.RawEvent = f.D
 		if err := json.Unmarshal(f.D, &payload.Data); err != nil {
-			logger.Errorf("解析事件数据失败 %s: %v", f.T, err)
-			return
+			// 载荷结构变化时降级: 保留原始字节透传, 交由 UnknownEvent 呈现而非静默丢弃
+			logger.Warnf("解析事件数据失败 %s: %v (透传)", f.T, err)
 		}
 	}
 	middleware.ProcessAsync(payload, c.api)

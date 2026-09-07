@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/utils"
 	"os"
 	"slices"
 	"strings"
@@ -150,7 +151,7 @@ func persist(mutate func(cfg *AppConfig) error, keys ...string) error {
 		return fmt.Errorf("encode config: %w", err)
 	}
 	updated = append(updated, '\n')
-	if err := os.WriteFile("./config.json", updated, 0600); err != nil {
+	if err := utils.WriteFile("./config.json", updated, 0600); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	normalize(&cfg)

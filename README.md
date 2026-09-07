@@ -6,7 +6,7 @@
 > 基于 Go 语言构建的现代化 QQ 开放平台机器人框架
 
 <p align="center">
-  <img alt="Aurorix Screenshot" src="https://github.com/user-attachments/assets/c64a8e2b-dbd4-4bd1-958e-335ad33bf4bc" width="100%" />
+  <img alt="Aurorix Screenshot" src="https://github.com/user-attachments/assets/9c0d1ada-08e4-4a4d-9ada-d5ab42c0d93a" width="100%" />
 </p>
 
 > [!NOTE]
@@ -194,6 +194,8 @@ mybot/plugins/hello/
 | `GROUP_MEMBER_ADD` / `GROUP_MEMBER_REMOVE` | 成员入群 / 退群 |
 | `MESSAGE_AUDIT_PASS` / `MESSAGE_AUDIT_REJECT` | 消息审核通过 / 驳回 |
 | `GROUP_ADD_ROBOT` / `GROUP_DEL_ROBOT` | 机器人被添加 / 移除 |
+| `GROUP_MSG_RECEIVE` / `GROUP_MSG_REJECT` | 群消息接收开启 / 关闭 |
+| `C2C_MSG_RECEIVE` / `C2C_MSG_REJECT` | 私聊消息接收开启 / 关闭 |
 
 </details>
 
@@ -266,7 +268,7 @@ cd web && pnpm build   # 产物嵌入 lib/admin/dist，重新编译实例即生�
 <details>
 <summary>管理台安全吗？</summary>
 
-登录使用 `admin_password`，会话为 HttpOnly Cookie（可保留 30 天）。密码留空仅本机可访问。
+登录使用 `admin_password`，会话为 HttpOnly Cookie（可保留 30 天）。密码留空仅本机可访问。登录失败会触发按来源 IP 的临时限流（5 分钟窗口），防密码爆破。
 
 </details>
 

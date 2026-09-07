@@ -134,7 +134,7 @@ func (w *conn) handshake() error {
 			err = w.write(frame{Op: opIdentify, D: mustJSON(map[string]any{
 				"token":      "QQBot " + w.token,
 				"intents":    w.c.intents,
-				"shard":      w.c.shard,
+				"shard":      [2]int{0, 1}, // 单实例语义: 固定整片
 				"properties": map[string]string{"os": runtime.GOOS, "browser": "", "device": ""},
 			})})
 		}

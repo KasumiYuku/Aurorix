@@ -1,69 +1,86 @@
-# 事件与能力
+# 事件
 
-> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [定时任务](schedule.md) · [存储](storage.md) · [事件](events.md) · [推送](push.md) · [API 参考](api.md) · [发布](publishing.md)
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [API 参考](api.md) · [发布](publishing.md)
 
-## 群事件
+平台推送的所有事件经事件总线解析为类型化对象，插件可订阅任意事件并写回调。
 
-### 入群申请
+## 订阅
 
-全局注册一次处理函数，所有入群申请统一走它：
+`event.On` 注册回调，回调签名：`func(ctx *event.Context, e *具体事件类型)`
 
 ```go
+import (
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/event"
+)
+
 func init() {
-	plugin.SetGlobalJoinGroupHandle(func(ctx *context.ApplyJoinGroupContext) {
-		ctx.Accept()
-		// ctx.Deny(reason)
-		// ctx.DenyAndAddToBlacklist(reason)
+	event.On(constant.GROUP_MEMBER_ADD, func(ctx *event.Context, e *event.MemberEvent) {
+		// e 直接是 *MemberEvent, 字段直接访问
+		profile := queryProfile(e.UserID)
+
+		// ctx 消息链自动发往事件所在群
+		ctx.Msg().Text("欢迎 " + profile.Name + " 加入本群!").Send()
+		// 一行等价: ctx.Text("...").Send()
 	})
 }
 ```
 
-需订阅 `GROUP_JOIN_REQUEST` 事件。处理函数返回 `error`，框架按返回值处理。
+- 一个事件可多次 `On`，回调全部触发（并发执行，顺序不保证）
+- 回调 panic 由框架捕获，不影响其他订阅者与内置分发
+- 未知事件按字符串名订阅即可（见下文）
 
-### 成员变动
+## 事件对象与环境
 
-`GROUP_MEMBER_ADD` / `GROUP_MEMBER_REMOVE` 事件经事件总线分发，按需订阅（见根 README「可订阅事件」）。
+| 事件 | 事件对象 (回调 `e`) | 字段 |
+|---|---|---|
+| `GROUP_AT_MESSAGE_CREATE` / `GROUP_MESSAGE_CREATE` | `*MessageEvent` | `EventID` `MessageID` `GroupID` `UserID` `Content`(已清洗@) `RawContent` `Mentions` `Attachments` `Quote` `Origin` |
+| `C2C_MESSAGE_CREATE` | `*MessageEvent` | 同上（`GroupID` 空，私聊目标） |
+| `INTERACTION_CREATE` | `*InteractionEvent` | `EventID` `ButtonID` `Data` `GroupID` `UserID` `MessageID` `Scene`(c2c/group) |
+| `GROUP_JOIN_REQUEST` | `*JoinRequestEvent` | `RequestID` `GroupID` `UserID` `Method` `Answer` `MessageID` |
+| `MESSAGE_AUDIT_PASS` / `MESSAGE_AUDIT_REJECT` | `*AuditEvent` | `AuditID` `MessageID` `Approved` |
+| `GROUP_MEMBER_ADD` / `GROUP_MEMBER_REMOVE` | `*MemberEvent` | `GroupID` `UserID` `OperatorID` `Timestamp` `Added` |
+| `GROUP_ADD_ROBOT` / `GROUP_DEL_ROBOT` | `*RobotEvent` | `GroupID` `OperatorID` `Timestamp` `Added` |
+| `GROUP_MSG_RECEIVE` / `GROUP_MSG_REJECT` | `*ReceiveEvent` | `GroupID` `OperatorID` `Timestamp` `Enabled` |
+| `C2C_MSG_RECEIVE` / `C2C_MSG_REJECT` | `*ReceiveEvent` | `UserID` `OperatorID` `Timestamp` `Enabled` |
 
-## 按钮交互
+> `Origin` 取值 `constant.GroupMessage` / `constant.PrivateMessage`。
+
+## ctx 能力（与指令上下文同款）
+
+`ctx` 内嵌 `MessageManager`：`Text` / `Markdown` / `Msg()` 链 / `Image` / `At` / `MarkdownTemplate` 全部可用，发送目标自动注入（群事件发群、私聊事件发私聊）。底层 `ctx.Qapi`（`*api.BotAPI`）提供撤回、审批、回执等平台操作：
 
 ```go
-// 发送带按钮的消息
-ctx.Msg().Text("选择操作").Keyboard(keyboard).Send()
+// 按钮回执
+event.On(constant.INTERACTION_CREATE, func(ctx *event.Context, e *event.InteractionEvent) {
+	ctx.Qapi.InteracteCallback(e.EventID)
+})
 
-// 注册按钮回调
-buttons.RegisterCallbackFunc("action_id", func(ctx *context.CallbackContext) {
-	// 处理点击
-	ctx.Done() // 3 秒内回执, 终止 QQ 端按钮 loading
+// 入群申请审批
+event.On(constant.GROUP_JOIN_REQUEST, func(ctx *event.Context, e *event.JoinRequestEvent) {
+	ctx.Qapi.AcceptGroupJoinRequest(e.RequestID, e.GroupID, e.UserID)
+	// 或 ctx.Qapi.RejectGroupJoinRequest(req, group, user, "原因")
 })
 ```
 
-- 按钮点击产生 `INTERACTION_CREATE` 事件，需订阅
-- `CallbackContext.Done()` 必须在 3 秒内回执，否则 QQ 端按钮判定超时
+`MessageManager` 与 `BotAPI` 完整方法见 [message.md](message.md) 与 [API 参考](api.md)。
 
-## HTTP 客户端
+## 未知事件
 
-外部请求一律走 `ctx.Request`（内置超时、连接池、重试），勿自建裸 client：
+未注册的事件不丢弃：以 `UnknownEvent` 透传（`RawType` 原始事件名、`RawBody` 原始载荷），订阅用字符串名：
 
 ```go
-var result map[string]any
-ctx.Request.Get("https://api.example.com/x", &result, nil)
-ctx.Request.Post("https://api.example.com/x", body, &result, nil)
+event.On(constant.EventType("PLATFORM_NEW_EVENT"), func(ctx *event.Context, e *event.UnknownEvent) {
+	_ = e.RawBody
+})
 ```
 
-## 图床 Provider
+## 自定义事件
 
-上传失败自动切换 Provider、`whitelist` 直通等能力由框架承担。自定义 Provider 只需实现接口并在 `init()` 注册，管理台自动出现配置表单：
+插件可用 `event.Register` 给事件换解析器，或注册新平台事件：
 
 ```go
-func init() {
-	assets.Register("mine", newMine, []assets.ConfigField{
-		{Key: "token", Label: "访问令牌", Type: "password", Required: true},
-	})
-}
-
-type mine struct{ cl *assets.Client; token string }
-
-func newMine(cl *assets.Client, cfg map[string]any) (assets.ImageProvider, error) { /* ... */ }
-func (p *mine) Name() string { return "mine" }
-func (p *mine) Upload(ctx context.Context, in assets.ProviderInput) (string, error) { /* ... */ }
+event.Register(constant.GROUP_MESSAGE_CREATE, func(p structers.Payload) event.Event {
+	return &myEvent{...} // 实现 Type() + 自定义字段
+})
 ```

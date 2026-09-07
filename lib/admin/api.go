@@ -6,28 +6,31 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"github.com/KasumiYuku/Aurorix/lib/schedule"
 	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/stats"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"net/http"
 	"strconv"
-
-	"github.com/gin-gonic/gin"
 )
 
 // handleOverview 概览聚合: 运行态 + 计数 + 网关现状。
-func handleOverview(deps Deps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		view := gin.H{
+func handleOverview(deps Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		view := H{
 			"runtime": state.Snapshot(),
-			"counts": gin.H{
+			"counts": H{
 				"plugins":   plugin.RegisteredCount(),
 				"commands":  plugin.GetCommandCount(),
 				"jobs":      schedule.GetJobCount(),
 				"templates": templates.GetMarkdownTemplateCount(),
 			},
-			"logs": gin.H{
+			"logs": H{
 				"total":  logx.Total(),
 				"errors": logx.Errors(),
 			},
+			"stats": stats.Snapshot(),
+		}
+		if deps.Profile != nil {
+			view["profile"] = deps.Profile.Get()
 		}
 		if deps.Gateway != nil {
 			view["gateway"] = deps.Gateway()
@@ -35,22 +38,23 @@ func handleOverview(deps Deps) gin.HandlerFunc {
 		if deps.Assets != nil {
 			view["assets"] = assetsSummary(deps.Assets)
 		}
-		c.JSON(http.StatusOK, view)
+		writeJSON(w, http.StatusOK, view)
 	}
 }
 
 // handleLogs 环形缓冲快照, 支持级别/来源/关键字过滤。
-func handleLogs(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "500"))
+func handleLogs(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
 	if limit <= 0 || limit > 2048 {
 		limit = 500
 	}
 	entries := logx.Snapshot(limit, logx.Filter{
-		MinLevel: c.Query("min_level"),
-		Scope:    c.Query("scope"),
-		Text:     c.Query("q"),
+		MinLevel: q.Get("min_level"),
+		Scope:    q.Get("scope"),
+		Text:     q.Get("q"),
 	})
-	c.JSON(http.StatusOK, gin.H{
+	writeJSON(w, http.StatusOK, H{
 		"entries": entries,
 		"scopes":  logx.Scopes(),
 		"total":   logx.Total(),
@@ -59,22 +63,22 @@ func handleLogs(c *gin.Context) {
 }
 
 // handleJobs 定时任务列表。
-func handleJobs(c *gin.Context) {
-	c.JSON(http.StatusOK, schedule.Jobs())
+func handleJobs(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, schedule.Jobs())
 }
 
 // handleJobPause 暂停/恢复任务。
-func handleJobPause(c *gin.Context) {
+func handleJobPause(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Paused bool `json:"paused"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
+	if err := readJSON(r, &input); err != nil {
+		writeJSON(w, http.StatusBadRequest, H{"error": "请求格式无效"})
 		return
 	}
-	id := c.Param("id")
+	id := r.PathValue("id")
 	if !schedule.Exists(id) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+		writeJSON(w, http.StatusNotFound, H{"error": "任务不存在"})
 		return
 	}
 	if input.Paused {
@@ -82,10 +86,10 @@ func handleJobPause(c *gin.Context) {
 	} else {
 		schedule.Resume(id)
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	writeJSON(w, http.StatusOK, H{"ok": true})
 }
 
-func assetsSummary(mgr *assets.Manager) gin.H {
+func assetsSummary(mgr *assets.Manager) H {
 	cfg := mgr.Config()
 	enabled := 0
 	for _, item := range cfg.Providers {
@@ -93,5 +97,5 @@ func assetsSummary(mgr *assets.Manager) gin.H {
 			enabled++
 		}
 	}
-	return gin.H{"providers": len(cfg.Providers), "enabled": enabled, "whitelist": len(cfg.Whitelist)}
+	return H{"providers": len(cfg.Providers), "enabled": enabled, "whitelist": len(cfg.Whitelist)}
 }

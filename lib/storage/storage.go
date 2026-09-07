@@ -266,6 +266,12 @@ func (store *Store) Clear() error {
 	return nil
 }
 
+// DB 返回底层 SQLite 连接, 供框架内部扩展表使用 (如 stats)。
+// 该连接受 MaxOpenConns(1) 约束, 调用方无需额外加锁。
+func DB() (*sql.DB, error) {
+	return ensureDB()
+}
+
 func (store *Store) validate(key string) error {
 	if store == nil || store.scope == "" || store.namespace == "" {
 		return errors.New("invalid storage namespace")

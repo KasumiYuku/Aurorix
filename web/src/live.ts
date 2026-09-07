@@ -13,6 +13,10 @@ const logCbs = new Set<(e: LogEntry) => void>()
 
 export const useLiveOverview = () => overview
 export const useLiveJobs = () => liveJobs
+/** 供页面本地更新快照(如档案手动刷新后即时回填) */
+export function patchOverview(patch: Partial<LiveOverview>) {
+  setOverview((cur) => (cur ? { ...cur, ...patch } : cur))
+}
 
 /** 订阅实时日志; 返回注销函数 */
 export function onLog(cb: (e: LogEntry) => void): () => void {

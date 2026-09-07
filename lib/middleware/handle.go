@@ -12,6 +12,7 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/parser"
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/stats"
 	"github.com/KasumiYuku/Aurorix/lib/structers"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"github.com/KasumiYuku/Aurorix/lib/utils"
@@ -173,6 +174,8 @@ func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 	switch payload.EventType {
 	case constant.GROUP_AT_MESSAGE_CREATE, constant.GROUP_MESSAGE_CREATE:
 		state.IncRecv()
+		stats.Recv()
+		stats.Group(payload.Data.GroupOpenID, "")
 		raw := payload.Data.Content
 		payload.Data.Content = utils.FilterAt(payload.Data.Content)
 		userID := payload.Data.Author.MemberOpenID
@@ -187,6 +190,8 @@ func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 		})
 	case constant.C2C_MESSAGE_CREATE:
 		state.IncRecv()
+		stats.Recv()
+		stats.Peer(payload.Data.Author.UserOpenID)
 		raw := payload.Data.Content
 		payload.Data.Content = strings.TrimSpace(payload.Data.Content)
 		if payload.Data.Content == "" {
@@ -200,6 +205,7 @@ func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 		})
 	case constant.INTERACTION_CREATE:
 		state.IncButton()
+		stats.Button()
 		data := payload.Data.Callback.Resolved.ButtonData
 		buttonId := payload.Data.Callback.Resolved.ButtonId
 		ctx := &context.CallbackContext{}
@@ -255,16 +261,16 @@ func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 	}
 }
 
-func messageRecoveryFunc(cmd, lifecycleCommand *plugin.Command, context *context.MessageContext) {
+func messageRecoveryFunc(cmd, lifecycleCommand *plugin.Command, ctx *context.MessageContext) {
 	defer func() {
 		if r := recover(); r != nil {
 			messageLog.Errorf("在执行指令%v (插件: %v)时出现panic: %v", cmd.Prefix, cmd.PluginId, r)
-			invokeErrorHook(cmd, lifecycleCommand, context, fmt.Errorf("command panic: %v", r))
+			invokeErrorHook(cmd, lifecycleCommand, ctx, fmt.Errorf("command panic: %v", r))
 		}
 	}()
-	if err := cmd.Handle(context); err != nil {
+	if err := cmd.Handle(ctx); err != nil {
 		messageLog.Errorf("在执行指令%v (插件: %v)时出现error: %v", cmd.Prefix, cmd.PluginId, err)
-		invokeErrorHook(cmd, lifecycleCommand, context, err)
+		invokeErrorHook(cmd, lifecycleCommand, ctx, err)
 	}
 }
 

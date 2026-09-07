@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/stats"
 )
 
 type MessageAPI struct {
@@ -17,6 +18,7 @@ func (m *MessageAPI) SendGroupMessage(data []byte, groupId string) error {
 	_, err := m.api.sendWithRetry(fmt.Sprintf("%v/v2/groups/%v/messages", m.api.ProxyAPI, groupId), data)
 	if err == nil {
 		state.IncSent()
+		stats.Sent()
 	}
 	return err
 }
@@ -26,6 +28,7 @@ func (m *MessageAPI) SendPrivateMessage(data []byte, userId string) error {
 	_, err := m.api.sendWithRetry(fmt.Sprintf("%v/v2/users/%v/messages", m.api.ProxyAPI, userId), data)
 	if err == nil {
 		state.IncSent()
+		stats.Sent()
 	}
 	return err
 }

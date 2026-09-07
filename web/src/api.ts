@@ -82,12 +82,46 @@ export interface GatewayStatus {
   since_ms?: number
 }
 
+export interface BotProfile {
+  id: string
+  username: string
+  avatar: string
+  bot: boolean
+  union_openid: string
+  union_user_account: string
+  share_url: string
+  welcome_msg: string
+}
+
+export interface DayStat {
+  recv: number
+  sent: number
+  button: number
+}
+
+export interface GroupRow {
+  id: string
+  name: string
+  msg: number
+}
+
+export interface StatsView {
+  groups: number
+  peers: number
+  total_recv: number
+  total_sent: number
+  today: DayStat
+  top_groups: GroupRow[]
+}
+
 export interface Overview {
   runtime: RuntimeView
   counts: { plugins: number; commands: number; jobs: number; templates: number }
   logs: { total: number; errors: number }
   gateway?: GatewayStatus | null
   assets?: { providers: number; enabled: number; whitelist: number }
+  profile?: BotProfile | null
+  stats?: StatsView
 }
 
 export interface PluginField {

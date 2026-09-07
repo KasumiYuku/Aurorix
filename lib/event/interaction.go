@@ -1,6 +1,8 @@
 package event
 
-import "github.com/KasumiYuku/Aurorix/lib/constant"
+import (
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+)
 
 // InteractionEvent 按钮交互事件。
 type InteractionEvent struct {
@@ -10,6 +12,7 @@ type InteractionEvent struct {
 	GroupID   string // 私聊场景为空
 	UserID    string
 	MessageID string
+	Scene     string // c2c | group
 }
 
 func (e *InteractionEvent) Type() constant.EventType { return constant.INTERACTION_CREATE }

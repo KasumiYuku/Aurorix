@@ -6,12 +6,11 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"github.com/KasumiYuku/Aurorix/lib/schedule"
 	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/stats"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 // liveBus 订阅门控的实时总线: 仅在存在 SSE 订阅者时运行 1s 快照 ticker 与
@@ -176,19 +175,23 @@ func (b *liveBus) send(s *liveSub, frame []byte) {
 // snapshotFrame 组装并编码当前全量快照; now 为服务器时钟毫秒,
 // 前端据此每秒重锚 uptime, 进程重启后自动归零重计。
 func (b *liveBus) snapshotFrame() ([]byte, bool) {
-	view := gin.H{
+	view := H{
 		"now":     time.Now().UnixMilli(),
 		"runtime": state.Snapshot(),
-		"counts": gin.H{
+		"counts": H{
 			"plugins":   plugin.RegisteredCount(),
 			"commands":  plugin.GetCommandCount(),
 			"jobs":      schedule.GetJobCount(),
 			"templates": templates.GetMarkdownTemplateCount(),
 		},
-		"logs": gin.H{
+		"logs": H{
 			"total":  logx.Total(),
 			"errors": logx.Errors(),
 		},
+		"stats": stats.Snapshot(),
+	}
+	if b.deps.Profile != nil {
+		view["profile"] = b.deps.Profile.Get()
 	}
 	if b.deps.Gateway != nil {
 		view["gateway"] = b.deps.Gateway()
@@ -219,23 +222,23 @@ func (b *liveBus) jobsFrame() []byte {
 
 // handleStream SSE 实时流入口。快照每秒一帧 (兼作心跳), 任务列表随变更即时
 // 推送, 日志逐条推送; 断线由前端退避重连, 重连即拿到全新全量状态。
-func (b *liveBus) handleStream(c *gin.Context) {
+func (b *liveBus) handleStream(w http.ResponseWriter, r *http.Request) {
 	sub := b.subscribe()
 	defer b.unsubscribe(sub)
 
-	rc := http.NewResponseController(c.Writer)
-	c.Header("Content-Type", "text/event-stream; charset=utf-8")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("X-Accel-Buffering", "no")
-	c.Writer.WriteHeader(http.StatusOK)
+	rc := http.NewResponseController(w)
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
 	rc.Flush()
 
 	for {
 		select {
-		case <-c.Request.Context().Done():
+		case <-r.Context().Done():
 			return
 		case frame := <-sub.ch:
-			if _, err := c.Writer.WriteString(string(frame)); err != nil {
+			if _, err := w.Write(frame); err != nil {
 				return
 			}
 			rc.Flush()

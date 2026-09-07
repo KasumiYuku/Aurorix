@@ -4,53 +4,51 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/config"
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 // registerPluginRoutes 插件目录/详情/配置/访问控制, 契约与旧版一致。
-func registerPluginRoutes(api *gin.RouterGroup) {
-	api.GET("/plugins", func(c *gin.Context) {
-		c.JSON(http.StatusOK, plugin.ManagedPlugins())
+func registerPluginRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /admin/api/plugins", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, plugin.ManagedPlugins())
 	})
-	api.GET("/plugins/:id", func(c *gin.Context) {
-		managed, ok := plugin.ManagedPluginByID(c.Param("id"))
+	api.HandleFunc("GET /admin/api/plugins/{id}", func(w http.ResponseWriter, r *http.Request) {
+		managed, ok := plugin.ManagedPluginByID(r.PathValue("id"))
 		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"error": "插件不存在"})
+			writeJSON(w, http.StatusNotFound, H{"error": "插件不存在"})
 			return
 		}
-		c.JSON(http.StatusOK, managed)
+		writeJSON(w, http.StatusOK, managed)
 	})
-	api.PUT("/plugins/:id", func(c *gin.Context) {
+	api.HandleFunc("PUT /admin/api/plugins/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var input map[string]any
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
+		if err := readJSON(r, &input); err != nil {
+			writeJSON(w, http.StatusBadRequest, H{"error": "请求格式无效"})
 			return
 		}
-		prepared, err := plugin.PrepareConfiguration(c.Param("id"), input)
+		prepared, err := plugin.PrepareConfiguration(r.PathValue("id"), input)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusBadRequest, H{"error": err.Error()})
 			return
 		}
-		if err := config.SavePluginSettings(c.Param("id"), prepared); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+		if err := config.SavePluginSettings(r.PathValue("id"), prepared); err != nil {
+			writeJSON(w, http.StatusInternalServerError, H{"error": "保存配置失败"})
 			return
 		}
-		if err := plugin.ApplyConfiguration(c.Param("id"), prepared); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if err := plugin.ApplyConfiguration(r.PathValue("id"), prepared); err != nil {
+			writeJSON(w, http.StatusBadRequest, H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"ok": true})
+		writeJSON(w, http.StatusOK, H{"ok": true})
 	})
-	api.PUT("/plugins/:id/access", func(c *gin.Context) {
+	api.HandleFunc("PUT /admin/api/plugins/{id}/access", func(w http.ResponseWriter, r *http.Request) {
 		var input plugin.AccessConfig
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
+		if err := readJSON(r, &input); err != nil {
+			writeJSON(w, http.StatusBadRequest, H{"error": "请求格式无效"})
 			return
 		}
-		prepared, err := plugin.PrepareAccessConfiguration(c.Param("id"), input)
+		prepared, err := plugin.PrepareAccessConfiguration(r.PathValue("id"), input)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusBadRequest, H{"error": err.Error()})
 			return
 		}
 		persisted := config.AccessConfig{
@@ -61,12 +59,12 @@ func registerPluginRoutes(api *gin.RouterGroup) {
 		for path, rule := range prepared.Commands {
 			persisted.Commands[path] = toConfigAccessRule(rule)
 		}
-		if err := config.SavePluginAccess(c.Param("id"), persisted); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存访问控制失败"})
+		if err := config.SavePluginAccess(r.PathValue("id"), persisted); err != nil {
+			writeJSON(w, http.StatusInternalServerError, H{"error": "保存访问控制失败"})
 			return
 		}
-		plugin.ApplyAccessConfiguration(c.Param("id"), prepared)
-		c.JSON(http.StatusOK, gin.H{"ok": true})
+		plugin.ApplyAccessConfiguration(r.PathValue("id"), prepared)
+		writeJSON(w, http.StatusOK, H{"ok": true})
 	})
 }
 

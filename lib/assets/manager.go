@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"sync"
+
+	"github.com/KasumiYuku/Aurorix/lib/utils"
 )
 
 // Manager 图床配置管理器
@@ -74,7 +76,7 @@ func (m *Manager) Save(cfg HostConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(m.path, append(data, '\n'), 0600); err != nil {
+	if err := utils.WriteFile(m.path, append(data, '\n'), 0600); err != nil {
 		return err
 	}
 	m.mu.Lock()

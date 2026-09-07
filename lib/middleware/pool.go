@@ -14,16 +14,18 @@ var dispatchLog = logx.New("dispatch")
 const (
 	poolQueue = 1024
 	poolIdle  = 30 * time.Second // worker 空闲回收时限
-	poolMax   = 256              // worker 并发上限
+	poolMax   = 256              // 实际并发执行上限
 )
 
 // taskPool 事件执行池: worker 空闲超时自退, 积压时按需补员, 峰值弹性扩展。
+// 并发执行数受 poolMax 信号量约束; 队列满时以临时 goroutine 排队, 保证不丢。
 type taskPool struct {
 	tasks chan func()
 	alive atomic.Int64
+	sem   chan struct{} // 容量 poolMax, 限流实际执行并发
 }
 
-var pool = &taskPool{tasks: make(chan func(), poolQueue)}
+var pool = &taskPool{tasks: make(chan func(), poolQueue), sem: make(chan struct{}, poolMax)}
 
 // Go 提交任务; 队列满直接临时 goroutine, 保证不丢。
 func (p *taskPool) Go(f func()) {
@@ -62,6 +64,8 @@ func (p *taskPool) loop() {
 }
 
 func (p *taskPool) exec(f func()) {
+	p.sem <- struct{}{} // 执行并发 ≤ poolMax
+	defer func() { <-p.sem }()
 	defer func() {
 		if r := recover(); r != nil {
 			dispatchLog.Errorf("任务panic: %v", r)

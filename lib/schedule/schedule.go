@@ -320,20 +320,20 @@ func runCronLoop() {
 }
 
 func tryFire(rj *registeredJob) {
-	jobsLock.RLock()
+	// 状态检查与 lastFire 写入同属写语义, 统一持写锁; fire 在锁外执行, 不阻塞调度
+	jobsLock.Lock()
 	if rj.paused {
-		jobsLock.RUnlock()
+		jobsLock.Unlock()
 		return
 	}
-	// 已被 Cancel 时 cancel channel 已关闭
 	select {
-	case <-rj.cancel:
-		jobsLock.RUnlock()
+	case <-rj.cancel: // 已被 Cancel 时 cancel channel 已关闭
+		jobsLock.Unlock()
 		return
 	default:
 	}
 	rj.lastFire = time.Now()
-	jobsLock.RUnlock()
+	jobsLock.Unlock()
 	NotifyChanged()
 	fire(rj)
 }

@@ -17,8 +17,15 @@ var eventIntentMap = map[string]int{
 	"GROUP_MESSAGE_CREATE":    intentUserMessage,
 	"C2C_MESSAGE_CREATE":      intentUserMessage,
 	"INTERACTION_CREATE":      intentInteractions,
+	"GROUP_JOIN_REQUEST":      intentGroupMembers,
 	"GROUP_MEMBER_ADD":        intentGroupMembers,
 	"GROUP_MEMBER_REMOVE":     intentGroupMembers,
+	"GROUP_ADD_ROBOT":         intentUserMessage,
+	"GROUP_DEL_ROBOT":         intentUserMessage,
+	"GROUP_MSG_RECEIVE":       intentUserMessage,
+	"GROUP_MSG_REJECT":        intentUserMessage,
+	"C2C_MSG_RECEIVE":         intentUserMessage,
+	"C2C_MSG_REJECT":          intentUserMessage,
 	"MESSAGE_AUDIT_PASS":      intentMessageAudit,
 	"MESSAGE_AUDIT_REJECT":    intentMessageAudit,
 }
@@ -30,8 +37,15 @@ func IntentEvents() []string {
 		"GROUP_MESSAGE_CREATE",
 		"C2C_MESSAGE_CREATE",
 		"INTERACTION_CREATE",
+		"GROUP_JOIN_REQUEST",
 		"GROUP_MEMBER_ADD",
 		"GROUP_MEMBER_REMOVE",
+		"GROUP_ADD_ROBOT",
+		"GROUP_DEL_ROBOT",
+		"GROUP_MSG_RECEIVE",
+		"GROUP_MSG_REJECT",
+		"C2C_MSG_RECEIVE",
+		"C2C_MSG_REJECT",
 		"MESSAGE_AUDIT_PASS",
 		"MESSAGE_AUDIT_REJECT",
 	}
@@ -44,7 +58,7 @@ func Intents(events []string) int {
 		bits |= eventIntentMap[e]
 	}
 	if bits == 0 {
-		// 默认订阅群消息 + 按钮回调
+		// 默认订阅群消息 + 按钮回调 + 成员变动
 		bits = defaultIntents
 	}
 	return bits

@@ -16,8 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 var logger = logx.New("push")
@@ -190,45 +188,52 @@ type pushResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-func HTTPHandle(c *gin.Context) {
-	scope := c.Param("scope")
-	openid := c.Param("openid")
+// writeJSON 写 JSON 响应。
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+func HTTPHandle(w http.ResponseWriter, r *http.Request) {
+	scope := r.PathValue("scope")
+	openid := r.PathValue("openid")
 	if scope != "group" && scope != "private" {
-		c.JSON(http.StatusBadRequest, pushResponse{Error: "scope must be 'group' or 'private'"})
+		writeJSON(w, http.StatusBadRequest, pushResponse{Error: "scope must be 'group' or 'private'"})
 		return
 	}
 	if openid == "" {
-		c.JSON(http.StatusBadRequest, pushResponse{Error: "openid is required"})
+		writeJSON(w, http.StatusBadRequest, pushResponse{Error: "openid is required"})
 		return
 	}
 
 	var req pushRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, pushResponse{Error: "invalid request body: " + err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, pushResponse{Error: "invalid request body: " + err.Error()})
 		return
 	}
 
-	key := c.GetHeader("X-Push-Key")
+	key := r.Header.Get("X-Push-Key")
 	if key == "" {
 		key = req.Key
 	}
 	if !verifyPushKey(openid, key) {
 		// 触发限速时统一 429，拒绝后续暴力尝试
 		if pushRateLimited() {
-			c.JSON(http.StatusTooManyRequests, pushResponse{Error: "too many failed attempts"})
+			writeJSON(w, http.StatusTooManyRequests, pushResponse{Error: "too many failed attempts"})
 			return
 		}
-		c.JSON(http.StatusUnauthorized, pushResponse{Error: "invalid or missing push key"})
+		writeJSON(w, http.StatusUnauthorized, pushResponse{Error: "invalid or missing push key"})
 		return
 	}
 
 	enabled, err := storage.Global().Has(enabledKey(scope, openid))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, pushResponse{Error: "check enabled: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, pushResponse{Error: "check enabled: " + err.Error()})
 		return
 	}
 	if !enabled {
-		c.JSON(http.StatusForbidden, pushResponse{Error: "target has not enabled push"})
+		writeJSON(w, http.StatusForbidden, pushResponse{Error: "target has not enabled push"})
 		return
 	}
 
@@ -236,18 +241,18 @@ func HTTPHandle(c *gin.Context) {
 	api := client
 	clientMu.RUnlock()
 	if api == nil {
-		c.JSON(http.StatusInternalServerError, pushResponse{Error: "qq api client not ready"})
+		writeJSON(w, http.StatusInternalServerError, pushResponse{Error: "qq api client not ready"})
 		return
 	}
 
 	content := strings.TrimSpace(req.Content)
 	if content == "" {
-		c.JSON(http.StatusBadRequest, pushResponse{Error: "content is required"})
+		writeJSON(w, http.StatusBadRequest, pushResponse{Error: "content is required"})
 		return
 	}
 	payload, err := buildPayload(strings.ToLower(req.Type), content)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, pushResponse{Error: err.Error()})
+		writeJSON(w, http.StatusBadRequest, pushResponse{Error: err.Error()})
 		return
 	}
 
@@ -259,10 +264,10 @@ func HTTPHandle(c *gin.Context) {
 		sendErr = api.SendPrivateMessage(payload, openid)
 	}
 	if sendErr != nil {
-		c.JSON(http.StatusBadGateway, pushResponse{Error: sendErr.Error()})
+		writeJSON(w, http.StatusBadGateway, pushResponse{Error: sendErr.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, pushResponse{OK: true})
+	writeJSON(w, http.StatusOK, pushResponse{OK: true})
 }
 
 func verifyPushKey(openid string, provided string) bool {

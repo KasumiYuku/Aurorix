@@ -3,8 +3,6 @@ package admin
 import (
 	"github.com/KasumiYuku/Aurorix/lib/assets"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 // assetsViewProvider 图床 provider 视图。
@@ -31,31 +29,31 @@ type assetsInputProvider struct {
 	Config   map[string]any `json:"config"`
 }
 
-func registerAssetsRoutes(api *gin.RouterGroup, mgr *assets.Manager) {
-	api.GET("/assets", func(c *gin.Context) {
-		c.JSON(http.StatusOK, buildAssetsView(mgr))
+func registerAssetsRoutes(api *http.ServeMux, mgr *assets.Manager) {
+	api.HandleFunc("GET /admin/api/assets", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, buildAssetsView(mgr))
 	})
-	api.PUT("/assets", func(c *gin.Context) {
+	api.HandleFunc("PUT /admin/api/assets", func(w http.ResponseWriter, r *http.Request) {
 		var input assetsConfigInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
+		if err := readJSON(r, &input); err != nil {
+			writeJSON(w, http.StatusBadRequest, H{"error": "请求格式无效"})
 			return
 		}
 		cfg, err := resolveAssetsConfig(mgr, input)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusBadRequest, H{"error": err.Error()})
 			return
 		}
 		if err := mgr.Save(cfg); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+			writeJSON(w, http.StatusInternalServerError, H{"error": "保存配置失败"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"ok": true})
+		writeJSON(w, http.StatusOK, H{"ok": true})
 	})
 }
 
 // buildAssetsView 合并注册表与磁盘配置生成管理视图, 密码字段掩码为空。
-func buildAssetsView(mgr *assets.Manager) gin.H {
+func buildAssetsView(mgr *assets.Manager) H {
 	cfg := mgr.Config()
 	stored := make(map[string]assets.ProviderItem, len(cfg.Providers))
 	for _, item := range cfg.Providers {
@@ -98,7 +96,7 @@ func buildAssetsView(mgr *assets.Manager) gin.H {
 	if whitelist == nil {
 		whitelist = []string{}
 	}
-	return gin.H{"whitelist": whitelist, "providers": providers}
+	return H{"whitelist": whitelist, "providers": providers}
 }
 
 // resolveAssetsConfig 请求载荷落成 HostConfig: 密码留空时保留旧值。

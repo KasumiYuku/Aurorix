@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/gin-gonic/gin"
 )
 
 // coreField 设置页字段元信息, Kind: text|secret|number|bool|intlist|strlist|select|note。
@@ -44,7 +42,7 @@ var coreSpecs = []coreField{
 }
 
 // handleGetConfig 设置页视图: 全部核心字段 + 当前值。
-func handleGetConfig(c *gin.Context) {
+func handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := config.Current()
 	fields := make([]coreField, 0, len(coreSpecs))
 	for _, spec := range coreSpecs {
@@ -52,7 +50,7 @@ func handleGetConfig(c *gin.Context) {
 		applyCoreValue(&field, cfg)
 		fields = append(fields, field)
 	}
-	c.JSON(http.StatusOK, gin.H{"fields": fields})
+	writeJSON(w, http.StatusOK, H{"fields": fields})
 }
 
 func applyCoreValue(field *coreField, cfg config.AppConfig) {
@@ -75,8 +73,6 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 		field.Value = cfg.Intents
 	case "prefixes":
 		field.Value = displayPrefixes(cfg.Prefixes)
-	case "plugins":
-		field.Value = cfg.Plugins
 	case "log_level":
 		field.Value = cfg.LogLevel
 	case "global_markdown":
@@ -91,13 +87,13 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 }
 
 // handlePutConfig 保存核心配置: 稀疏补丁, 校验后写盘并热更。
-func handlePutConfig(deps Deps) gin.HandlerFunc {
-	return func(c *gin.Context) {
+func handlePutConfig(deps Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
 			Values map[string]json.RawMessage `json:"values"`
 		}
-		if err := c.ShouldBindJSON(&input); err != nil || input.Values == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
+		if err := readJSON(r, &input); err != nil || input.Values == nil {
+			writeJSON(w, http.StatusBadRequest, H{"error": "请求格式无效"})
 			return
 		}
 		specByKey := make(map[string]coreField, len(coreSpecs))
@@ -110,8 +106,8 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 
 		for key, raw := range input.Values {
 			spec, ok := specByKey[key]
-			if !ok || key == "plugins" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "不支持修改的配置项: " + key})
+			if !ok {
+				writeJSON(w, http.StatusBadRequest, H{"error": "不支持修改的配置项: " + key})
 				return
 			}
 			if string(raw) == "null" {
@@ -121,7 +117,7 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 			if spec.Kind == "secret" {
 				var v string
 				if err := json.Unmarshal(raw, &v); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": key + " 必须为字符串"})
+					writeJSON(w, http.StatusBadRequest, H{"error": key + " 必须为字符串"})
 					return
 				}
 				if v == "" {
@@ -132,7 +128,7 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 			if key == "retry_when" {
 				converted, err := toIntSlice(raw)
 				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "retry_when 每行需为整数"})
+					writeJSON(w, http.StatusBadRequest, H{"error": "retry_when 每行需为整数"})
 					return
 				}
 				raw, _ = json.Marshal(converted)
@@ -140,12 +136,12 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 			if key == "intents" {
 				var selected []string
 				if err := json.Unmarshal(raw, &selected); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "intents 格式无效"})
+					writeJSON(w, http.StatusBadRequest, H{"error": "intents 格式无效"})
 					return
 				}
 				for _, event := range selected {
 					if !slices.Contains(gateway.IntentEvents(), event) {
-						c.JSON(http.StatusBadRequest, gin.H{"error": "未知订阅事件: " + event})
+						writeJSON(w, http.StatusBadRequest, H{"error": "未知订阅事件: " + event})
 						return
 					}
 				}
@@ -153,7 +149,7 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 			if key == "prefixes" {
 				var selected []string
 				if err := json.Unmarshal(raw, &selected); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "prefixes 格式无效"})
+					writeJSON(w, http.StatusBadRequest, H{"error": "prefixes 格式无效"})
 					return
 				}
 				converted := make([]string, 0, len(selected))
@@ -163,7 +159,7 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 					} else if slices.Contains([]string{"!", "/", "#"}, p) {
 						converted = append(converted, p)
 					} else {
-						c.JSON(http.StatusBadRequest, gin.H{"error": "未知前缀符号: " + p})
+						writeJSON(w, http.StatusBadRequest, H{"error": "未知前缀符号: " + p})
 						return
 					}
 				}
@@ -178,11 +174,11 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 			}
 		}
 		if len(overrides) == 0 {
-			c.JSON(http.StatusOK, gin.H{"ok": true, "restart_needed": false})
+			writeJSON(w, http.StatusOK, H{"ok": true, "restart_needed": false})
 			return
 		}
 		if err := config.UpdateCore(overrides); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusBadRequest, H{"error": err.Error()})
 			return
 		}
 		next := config.Current()
@@ -192,7 +188,7 @@ func handlePutConfig(deps Deps) gin.HandlerFunc {
 		if hasAny(hotChanged, "log_level") {
 			logx.SetConsoleLevel(next.LogLevel)
 		}
-		c.JSON(http.StatusOK, gin.H{
+		writeJSON(w, http.StatusOK, H{
 			"ok":             true,
 			"restart_needed": len(restartChanged) > 0,
 			"restart_fields": restartChanged,

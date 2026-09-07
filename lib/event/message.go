@@ -19,7 +19,6 @@ type MessageEvent struct {
 	Mentions    []structers.Mention
 	Attachments []message.Attachment
 	Quote       *structers.Quote
-	AvatarURL   string
 }
 
 func (e *MessageEvent) Type() constant.EventType { return e.eventType }

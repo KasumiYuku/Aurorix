@@ -26,6 +26,9 @@ const ICONS = {
   chevron: 'M6 9l6 6 6-6',
   cpu: 'M7 7h10v10H7zM10 7V3M14 7V3M10 21v-4M14 21v-4M7 10H3M7 14H3M21 10h-4M21 14h-4',
   layers: 'M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  users: 'M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  message: 'M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z',
+  trending: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6',
 } as const
 
 export type IconName = keyof typeof ICONS
