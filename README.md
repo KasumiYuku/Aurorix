@@ -45,7 +45,7 @@ aurx new mybot --framework Aurorix
 
 # 4. 接入官方示例插件（可选）
 cd mybot
-aurx add [github.com/KasumiYuku/Aurorix/plugins/bind](https://github.com/KasumiYuku/Aurorix/plugins/bind)
+aurx add github.com/KasumiYuku/Aurorix/plugins/bind
 ```
 
 ### 配置凭证
