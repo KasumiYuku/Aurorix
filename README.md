@@ -10,7 +10,6 @@
 </p>
 
 > [!NOTE]
-> **致谢与来源**
 > Aurorix 深度重构并扩展自优秀的开源项目 [Polarix](https://github.com/YearnstudioYangyi/Polarix)。我们在完整保留其核心架构与设计哲学的基础上，进行了大量功能延伸
 > 
 > 本项目严格遵循 MIT 协议，保留上游全部版权声明与提交历史，在此向 Polarix 的原作者及全体贡献者致以崇高敬意。若您寻求基础稳固、久经考验且官方活跃维护的原生体验，我们强烈推荐您优先关注并使用原版 [Polarix](https://github.com/YearnstudioYangyi/Polarix)

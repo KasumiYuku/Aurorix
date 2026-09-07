@@ -4,8 +4,6 @@ Aurorix 插件开发从入门到发布。文档按主题分层，随时跳转。
 
 ## 架构总览
 
-## 架构总览
-
 ```mermaid
 flowchart LR
     QQ((QQ 开放平台)) -- 消息进来 --> Aurorix
