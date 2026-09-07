@@ -1,9 +1,9 @@
 package message
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/templates"
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
 
 type TextMessage struct {

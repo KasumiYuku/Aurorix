@@ -8,10 +8,10 @@ import (
 )
 
 // cmdAdd 把插件模块写入实例 main.go 空导入, 并 go get 拉取依赖。
-// 用法: plrx add github.com/某作者/某插件
+// 用法: aurx add github.com/某作者/某插件
 func cmdAdd(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("用法: plrx add <插件 module 路径>")
+		return fmt.Errorf("用法: aurx add <插件 module 路径>")
 	}
 	path := args[0]
 	mainFile := "main.go"
@@ -65,7 +65,7 @@ func goGet(path string) error {
 	cmd := exec.Command("go", "get", path)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "plrx: go get 失败, 可稍后手动执行 go mod tidy:", err)
+		fmt.Fprintln(os.Stderr, "aurx: go get 失败, 可稍后手动执行 go mod tidy:", err)
 	}
 	return nil
 }

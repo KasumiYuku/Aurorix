@@ -5,7 +5,7 @@ package api
 import (
 	"fmt"
 
-	"Plrx/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
 )
 
 type ManageAPI struct {

@@ -6,9 +6,9 @@ package event
 import (
 	"strings"
 
-	"Plrx/lib/constant"
-	"Plrx/lib/structers"
-	"Plrx/lib/utils"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/utils"
 )
 
 func init() {

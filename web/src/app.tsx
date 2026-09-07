@@ -110,7 +110,7 @@ function Shell() {
             P
           </span>
           <div class="min-w-0">
-            <b class="font-display block text-[17px] font-semibold leading-tight tracking-tight text-foreground">Polarix</b>
+            <b class="font-display block text-[17px] font-semibold leading-tight tracking-tight text-foreground">Aurorix</b>
             <small class="text-[11px] tracking-[0.18em] text-muted-foreground-2">DEEP FOREST</small>
           </div>
         </div>

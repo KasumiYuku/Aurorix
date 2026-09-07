@@ -1,20 +1,20 @@
 package middleware
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/buttons"
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/event"
-	"Plrx/lib/logx"
-	"Plrx/lib/message"
-	"Plrx/lib/parser"
-	"Plrx/lib/plugin"
-	"Plrx/lib/state"
-	"Plrx/lib/structers"
-	"Plrx/lib/templates"
-	"Plrx/lib/utils"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/buttons"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/event"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/parser"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
+	"github.com/KasumiYuku/Aurorix/lib/utils"
 	"strings"
 )
 
@@ -59,6 +59,7 @@ func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts command
 	}
 	ctx.Init(payload.Data.Id, payload.ID, client)
 	ctx.BindStorage(leaf.PluginId, commandPath)
+	ctx.PluginId = leaf.PluginId
 	if opts.groupID != "" {
 		ctx.SetGroupId(opts.groupID)
 	}

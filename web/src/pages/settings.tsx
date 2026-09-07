@@ -191,7 +191,7 @@ export default function SettingsPage() {
           <div class="flex items-center justify-between gap-4 border-b border-card-divider px-6 py-4 last:border-b-0">
             <div>
               <b class="text-[13.5px] font-semibold text-foreground">重启服务</b>
-              <p class="mt-0.5 max-w-[620px] text-xs text-muted-foreground-2">优雅关闭后自动重新拉起进程（PID 会变化）。由 systemd 等守护管理时请设置 POLARIX_SUPERVISED=1</p>
+              <p class="mt-0.5 max-w-[620px] text-xs text-muted-foreground-2">优雅关闭后自动重新拉起进程（PID 会变化）。由 systemd 等守护管理时请设置 AURORIX_SUPERVISED=1</p>
             </div>
             <Button variant="danger" onClick={() => openConfirm('restart')}>
               <Icon name="refresh" size={15} /> 重启

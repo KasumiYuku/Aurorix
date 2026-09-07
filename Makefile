@@ -28,11 +28,11 @@ run:
 
 install:
 	@echo "[install]"
-	go install ./tools/plrx
+	go install ./tools/aurx
 
 web:
 	@echo "[web]"
 	cd web && pnpm build
 
 clean:
-	rm -f polarix
+	rm -f aurorix

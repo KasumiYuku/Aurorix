@@ -1,9 +1,9 @@
 package event
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/message"
-	"Plrx/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
 )
 
 // MessageEvent 群/私聊消息事件公共视图。Content 为清洗后文本, RawContent 为原文。

@@ -1,10 +1,10 @@
 package middleware
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/event"
-	"Plrx/lib/logx"
-	"Plrx/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/event"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
 	"sync/atomic"
 	"time"
 )

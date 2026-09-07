@@ -2,16 +2,16 @@
 package push
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/logx"
-	"Plrx/lib/plugin"
-	"Plrx/lib/storage"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/storage"
 	"net/http"
 	"strings"
 	"sync"

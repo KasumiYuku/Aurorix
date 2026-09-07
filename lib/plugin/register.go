@@ -1,11 +1,12 @@
 package plugin
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/logx"
 	"cmp"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"slices"
 	"sort"
 	"strings"
@@ -94,6 +95,11 @@ func Register(plugin *Plugin) {
 	lock.Lock()
 	defer lock.Unlock()
 	globalPlugins[plugin.Id] = plugin
+	if plugin.TemplateFS != nil {
+		if err := templates.RegisterFS(plugin.Id, plugin.TemplateFS, "templates/markdown"); err != nil {
+			regLog.Warnf("插件 %s 模板装载失败: %v", plugin.Id, err)
+		}
+	}
 	for _, v := range plugin.Commands {
 		if v.Handle == nil {
 			v.Handle = defaultCommandHandle

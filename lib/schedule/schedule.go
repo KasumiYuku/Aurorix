@@ -1,11 +1,11 @@
 package schedule
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/logx"
-	"Plrx/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"sync"
 	"time"
 )
@@ -354,6 +354,7 @@ func fire(rj *registeredJob) {
 	ctx.Init(client)
 	ctx.JobId = job.Id
 	ctx.PluginId = job.PluginId
+	ctx.MessageManager.PluginId = job.PluginId
 	if job.PluginId != "" {
 		ctx.BindStorage(job.PluginId, "schedule:"+job.Id)
 	}

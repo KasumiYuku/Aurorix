@@ -1,10 +1,10 @@
 package config
 
 import (
-	"Plrx/lib/constant"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"os"
 	"slices"
 	"strings"

@@ -3,14 +3,14 @@ package api
 // FilesAPI 媒体上行域: 单文件直传与超阈值分片上传, 返回 file_info 供媒体消息引用。
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/requests"
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
 	"os"
 	"strconv"
 	"time"

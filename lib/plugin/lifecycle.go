@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"Plrx/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/context"
 	"sync"
 )
 

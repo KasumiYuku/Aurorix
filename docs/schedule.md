@@ -2,7 +2,7 @@
 
 > 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [定时任务](schedule.md) · [存储](storage.md) · [事件](events.md) · [推送](push.md) · [API 参考](api.md) · [发布](publishing.md)
 
-插件在 `init()` 中注册定时任务，框架进程内调度执行。包路径 `Plrx/lib/schedule`。
+插件在 `init()` 中注册定时任务，框架进程内调度执行。包路径 `github.com/KasumiYuku/Aurorix/lib/schedule`。
 
 ## Job
 

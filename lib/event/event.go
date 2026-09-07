@@ -3,8 +3,8 @@
 package event
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
 )
 
 // Event 类型化事件。

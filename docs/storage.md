@@ -39,7 +39,7 @@ plugin.Register(&plugin.Plugin{
 
 ## 数据存储
 
-SQLite 持久化，按命名空间隔离。包路径 `Plrx/lib/storage`，数据库路径由配置 `database` 指定（实例默认 `data/bot.db`）。
+SQLite 持久化，按命名空间隔离。包路径 `github.com/KasumiYuku/Aurorix/lib/storage`，数据库路径由配置 `database` 指定（实例默认 `data/bot.db`）。
 
 ### 命名空间
 

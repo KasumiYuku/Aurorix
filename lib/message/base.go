@@ -1,11 +1,11 @@
 package message
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/contract"
 	"encoding/json"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/contract"
 	"sync"
 )
 

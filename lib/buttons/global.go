@@ -1,7 +1,7 @@
 package buttons
 
 import (
-	"Plrx/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"sync"
 )
 

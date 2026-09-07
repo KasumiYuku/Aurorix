@@ -3,30 +3,30 @@
 package bot
 
 import (
-	"Plrx/lib/admin"
-	"Plrx/lib/api"
-	"Plrx/lib/assets"
-	_ "Plrx/lib/assets/providers"
-	"Plrx/lib/buttons"
-	"Plrx/lib/config"
-	"Plrx/lib/constant"
-	"Plrx/lib/gateway"
-	"Plrx/lib/logx"
-	"Plrx/lib/middleware"
-	"Plrx/lib/plugin"
-	"Plrx/lib/push"
-	"Plrx/lib/requests"
-	"Plrx/lib/schedule"
-	"Plrx/lib/state"
-	"Plrx/lib/storage"
-	"Plrx/lib/structers"
-	"Plrx/lib/templates"
 	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/admin"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
+	_ "github.com/KasumiYuku/Aurorix/lib/assets/providers"
+	"github.com/KasumiYuku/Aurorix/lib/buttons"
+	"github.com/KasumiYuku/Aurorix/lib/config"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/gateway"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/middleware"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/push"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/schedule"
+	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/storage"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"net/http"
 	"os"
 	"os/exec"
@@ -247,7 +247,7 @@ func shutdown(srv *http.Server, gw *gateway.Client, restart bool) {
 
 // spawnSelf 以相同参数重新拉起自身。外部守护管理时直接退出交由守护拉起。
 func spawnSelf() {
-	if os.Getenv("POLARIX_SUPERVISED") != "" {
+	if os.Getenv("AURORIX_SUPERVISED") != "" {
 		logger.Infof("外部守护接管重启, 直接退出")
 		return
 	}

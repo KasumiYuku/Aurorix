@@ -1,4 +1,4 @@
-module Plrx
+module github.com/KasumiYuku/Aurorix
 
 go 1.26
 

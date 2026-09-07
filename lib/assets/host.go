@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"Plrx/lib/images"
-	"Plrx/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/images"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
 )
 
 var imgRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)

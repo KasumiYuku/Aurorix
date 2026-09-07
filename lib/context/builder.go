@@ -1,9 +1,9 @@
 package context
 
 import (
-	"Plrx/lib/contract"
-	"Plrx/lib/message"
 	"errors"
+	"github.com/KasumiYuku/Aurorix/lib/contract"
+	"github.com/KasumiYuku/Aurorix/lib/message"
 	"strings"
 	"sync"
 )

@@ -1,23 +1,29 @@
 # 开发文档
 
-Polarix 插件开发从入门到发布。文档按主题分层，随时跳转。
+Aurorix 插件开发从入门到发布。文档按主题分层，随时跳转。
 
 ## 架构总览
 
-```
-            ┌─────────────────────────────────────────────┐
-            │                Polarix 框架                   │
-            │                                             │
-  消息进来    │  lib/plugin   指令注册 / 匹配 / 权限 / 参数    │
- ──────────▶ │  lib/context  消息上下文与发送器              │
-   QQ 开放平台 │  lib/schedule 定时任务调度                    │
-              │  lib/storage  SQLite 存储                   │
-              │  lib/bot      运行时外壳 (入口调用 Run)       │
-            └─────────────────────────────────────────────┘
-                    ▲                     │
-                    │ init() 注册          │ 空导入启用
-                    │                     ▼
-                你的插件包            main.go 接入清单
+## 架构总览
+
+```mermaid
+flowchart LR
+    QQ((QQ 开放平台)) -- 消息进来 --> Aurorix
+
+    subgraph Aurorix [Aurorix 框架]
+        direction TB
+        Plugin[lib/plugin<br/>指令注册 / 匹配 / 权限 / 参数]
+        Context[lib/context<br/>消息上下文与发送器]
+        Schedule[lib/schedule<br/>定时任务调度]
+        Storage[lib/storage<br/>SQLite 存储]
+        Bot[lib/bot<br/>运行时外壳 - 入口调用 Run]
+    end
+
+    MyPlugin>你的插件包] -- "init() 注册" --> Aurorix
+    Aurorix -- "空导入启用" --> Main[[main.go 接入清单]]
+
+    classDef framework fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    class Aurorix framework;
 ```
 
 插件是一个普通 Go 包：包内 `init()` 调用 `plugin.Register(...)` 完成注册，入口 `main.go` 空导入启用。匹配、权限、参数解析、配置热更、访问控制全部由框架承担——插件只声明指令与处理逻辑。
@@ -49,8 +55,8 @@ Polarix 插件开发从入门到发布。文档按主题分层，随时跳转。
 在实例目录执行：
 
 ```bash
-plrx new-plugin hello     # 生成 plugins/hello/hello.go
-plrx add mybot/plugins/hello   # 写入 main.go 空导入
+aurx new-plugin hello     # 生成 plugins/hello/hello.go
+aurx add mybot/plugins/hello   # 写入 main.go 空导入
 ```
 
 生成的骨架：
@@ -59,15 +65,20 @@ plrx add mybot/plugins/hello   # 写入 main.go 空导入
 package hello
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
+	"embed"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
 )
+
+//go:embed templates/markdown/*.md
+var templateFS embed.FS
 
 func init() {
 	plugin.Register(&plugin.Plugin{
-		Id:   "hello",
-		Name: "hello",
+		Id:         "hello",
+		Name:       "hello",
+		TemplateFS: templateFS,
 		Commands: []*plugin.Command{
 			{
 				Prefix:   "hello",
@@ -84,13 +95,52 @@ func cmd(ctx *context.MessageContext) error {
 }
 ```
 
+目录结构（`templates/markdown/Hello.md` 是模板文件，随插件 embed 进二进制）：
+
+```
+mybot/plugins/hello/
+├── hello.go              插件主体
+└── templates/markdown/Hello.md
+```
+
+### 给插件加一个 Markdown 模板
+
+模板按文件名注册（`Hello.md` → 模板 ID `Hello`），编辑 `plugins/hello/templates/markdown/Hello.md`：
+
+```markdown
+### 你好 {{name}}
+
+你发的内容: {{body}}
+```
+
+指令里用 `ctx.MarkdownTemplate` 填充并发送（先 import 模板包）：
+
+```go
+import "github.com/KasumiYuku/Aurorix/lib/templates"   // 加在 import 块里
+
+func cmd(ctx *context.MessageContext) error {
+	md, err := ctx.MarkdownTemplate("Hello", &templates.Args{
+		"name": "机器人",
+		"body": ctx.Parsed,
+	})
+	if err != nil {
+		return err
+	}
+	return md.Send()
+}
+```
+
+模板填充失败返回 error；确定模板与参数匹配、想少写错误分支时可用 `ctx.UnsafeMarkdownTemplate`（失败直接 panic）：
+
+模板的解析规则：插件命名空间优先，未命中回落全局命名空间（框架内置模板如 `Card`）。`templates/markdown` 内可放任意多个 `.md`，文件名即模板 ID。更多规则见 [message.md](message.md#markdown-模板)。
+
 编辑 `plugins/hello/hello.go` 写你的逻辑，然后：
 
 ```bash
-plrx run    # 重新编译并启动
+aurx run    # 重新编译并启动
 ```
 
-群里发送 `/hello` 验证。改代码 → `plrx run`，循环迭代。
+群里发送 `/hello` 验证。改代码 → `aurx run`，循环迭代。
 
 ## 文档导航
 

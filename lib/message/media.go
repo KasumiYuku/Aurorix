@@ -1,9 +1,9 @@
 package message
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/assets"
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
 	"os"
 	"path"
 	"strings"

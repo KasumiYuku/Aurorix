@@ -1,14 +1,14 @@
 package imagegen
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/logx"
-	"Plrx/lib/message"
-	"Plrx/lib/plugin"
-	"Plrx/lib/requests"
-	"Plrx/lib/templates"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"io"
 	"net/http"
 	"os"

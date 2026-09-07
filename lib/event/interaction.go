@@ -1,6 +1,6 @@
 package event
 
-import "Plrx/lib/constant"
+import "github.com/KasumiYuku/Aurorix/lib/constant"
 
 // InteractionEvent 按钮交互事件。
 type InteractionEvent struct {

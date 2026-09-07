@@ -1,10 +1,10 @@
 package admin
 
 import (
-	"Plrx/lib/config"
-	"Plrx/lib/gateway"
-	"Plrx/lib/logx"
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/config"
+	"github.com/KasumiYuku/Aurorix/lib/gateway"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"net/http"
 	"slices"
 	"strconv"

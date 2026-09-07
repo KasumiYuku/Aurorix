@@ -2,10 +2,10 @@
 package admin
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/assets"
-	"Plrx/lib/config"
 	"embed"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/config"
 	"io/fs"
 	"net"
 	"net/http"

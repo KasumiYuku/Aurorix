@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"sync"
 
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/logx"
-	"Plrx/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
 )
 
 var busLog = logx.New("event")

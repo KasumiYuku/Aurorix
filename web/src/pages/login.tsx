@@ -31,7 +31,7 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
           P
         </span>
         <span class="font-display absolute -left-10 bottom-[4%] -rotate-[5deg] text-[clamp(80px,14vw,220px)] font-semibold leading-none tracking-tight text-primary-500/8">
-          Polarix
+          Aurorix
         </span>
         <div class="absolute left-1/2 top-[-220px] h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-primary-500/15 blur-[110px]" />
       </div>
@@ -46,7 +46,7 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
             P
           </span>
           <div class="min-w-0">
-            <h1 class="font-display text-[22px] font-semibold leading-tight tracking-tight text-foreground">Polarix</h1>
+            <h1 class="font-display text-[22px] font-semibold leading-tight tracking-tight text-foreground">Aurorix</h1>
             <small class="text-[10.5px] tracking-[0.2em] text-muted-foreground-2">DEEP FOREST</small>
           </div>
         </div>

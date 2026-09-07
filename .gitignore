@@ -6,8 +6,8 @@ lib/assets/providers/
 *.db-shm
 *.db-wal
 web/node_modules/
-polarix
-Plrx
+aurorix
+aurorix
 lib/admin/dist/
 
 # 插件:官方示例入库, 个人/生态插件目录永不追踪
@@ -21,4 +21,5 @@ plugins/*
 *.md
 !README.md
 !docs/*.md
-!templates/markdown/*.md
+!lib/templates/builtin/markdown/*.md
+!plugins/*/templates/markdown/*.md

@@ -11,10 +11,10 @@ import (
 // cmdNew 生成实例骨架: go.mod + main.go + config.example.json。
 func cmdNew(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("用法: plrx new <目录> [--framework 框架路径]")
+		return fmt.Errorf("用法: aurx new <目录> [--framework 框架路径]")
 	}
 	dir := args[0]
-	framework := "../Polarix"
+	framework := "../Aurorix"
 	for i := 1; i < len(args); i++ {
 		if args[i] == "--framework" && i+1 < len(args) {
 			framework = args[i+1]
@@ -31,21 +31,21 @@ func cmdNew(args []string) error {
 
 go 1.26
 
-require Plrx v0.0.0
+require github.com/KasumiYuku/Aurorix v0.0.0
 
-replace Plrx => %s
+replace github.com/KasumiYuku/Aurorix => %s
 `, module, framework),
 		"main.go": `package main
 
 import (
-	"Plrx/lib/bot"
+	"github.com/KasumiYuku/Aurorix/lib/bot"
 )
 
 func main() {
 	bot.Run()
 }
 `,
-		".gitignore": "config.json\nassets.json\ndata/\n*.db\n*.db-shm\n*.db-wal\n" + module + "\npolarix\n",
+		".gitignore": "config.json\nassets.json\ndata/\n*.db\n*.db-shm\n*.db-wal\n" + module + "\naurorix\n",
 	}
 	for path, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, path), []byte(content), 0o644); err != nil {
@@ -61,14 +61,11 @@ func main() {
 	if err := os.MkdirAll(filepath.Join(dir, "plugins"), 0o755); err != nil {
 		return err
 	}
-	if err := copyTemplates(dir, framework); err != nil {
-		return err
-	}
 	if err := runTidy(dir); err != nil {
 		return fmt.Errorf("go mod tidy 失败: %w (可稍后在实例目录手动执行)", err)
 	}
 	fmt.Printf("实例已创建: %s\n", dir)
-	fmt.Printf("下一步: cd %s && 编辑 config.json 填入凭证 && plrx add <插件module> && plrx run\n", dir)
+	fmt.Printf("下一步: cd %s && 编辑 config.json 填入凭证 && aurx add <插件module> && aurx run\n", dir)
 	return nil
 }
 
@@ -81,32 +78,6 @@ func initConfig(dir, framework string) error {
 	cfg := strings.Replace(string(content), `"database": "bot.db"`, `"database": "data/bot.db"`, 1)
 	for _, name := range []string{"config.example.json", "config.json"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(cfg), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// copyTemplates 把框架官方模板复制进实例 templates/markdown, 实例独有一份。
-func copyTemplates(dir, framework string) error {
-	src := filepath.Join(framework, "templates", "markdown")
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return nil // 框架无模板目录时跳过
-	}
-	dst := filepath.Join(dir, "templates", "markdown")
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		content, err := os.ReadFile(filepath.Join(src, e.Name()))
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(dst, e.Name()), content, 0o644); err != nil {
 			return err
 		}
 	}
@@ -133,7 +104,7 @@ func sanitizeModule(name string) string {
 		}
 	}
 	if b.Len() == 0 {
-		return "polarix-bot"
+		return "aurorix-bot"
 	}
 	return b.String()
 }

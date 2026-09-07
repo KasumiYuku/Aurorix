@@ -1,9 +1,9 @@
 package assets
 
 import (
-	"Plrx/lib/images"
 	"encoding/base64"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/images"
 	"os"
 	"path"
 	"strings"

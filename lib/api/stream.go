@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"Plrx/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
 )
 
 // StreamInputState 流式消息输入状态。

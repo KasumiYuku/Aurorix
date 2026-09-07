@@ -1,12 +1,12 @@
 package admin
 
 import (
-	"Plrx/lib/logx"
-	"Plrx/lib/plugin"
-	"Plrx/lib/schedule"
-	"Plrx/lib/state"
-	"Plrx/lib/templates"
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/schedule"
+	"github.com/KasumiYuku/Aurorix/lib/state"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"net/http"
 	"sync"
 	"time"

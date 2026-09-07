@@ -144,18 +144,31 @@ buttons.RegisterCallbackFunc("btn_cb", func(ctx *context.CallbackContext) error 
 
 ## Markdown 模板
 
-模板文件放实例 `templates/markdown/*.md`，按文件名注册，`{{.key}}` 占位：
+模板随插件/框架通过 `go:embed` 编译进二进制，按文件名注册，`{{.key}}` 占位：
 
 ```go
-// templates/markdown/MyCard.md:
+// 插件内 templates/markdown/MyCard.md:
 // # {{.title}}
 // {{.body}}
 
+//go:embed templates/markdown/*.md
+var templateFS embed.FS
+
+plugin.Register(&plugin.Plugin{Id: "my", TemplateFS: templateFS, ...})
+
+// 插件指令内
 ctx.MarkdownTemplate("MyCard", &templates.Args{"title": "周报", "body": "本周..."}).Send()
 ctx.UnsafeMarkdownTemplate("MyCard", &templates.Args{}) // 填充失败时 panic
 ```
 
-实例的模板目录归实例所有，增删改后重启生效。官方模板已随 `plrx new` 复制进实例，可自由修改。
+### 命名空间解析
+
+- 插件 `TemplateFS` 下的模板注册到**插件命名空间**（插件 ID），`ctx.MarkdownTemplate` 优先查插件命名空间，未命中回落**全局命名空间**（框架内置模板）
+- 无插件上下文（定时任务/框架内部）直接查全局命名空间
+- 同名模板在不同插件间互不干扰；框架内置模板（如 `Card`）由全局命名空间提供
+- 模板增删改后重新编译生效，无运行时文件依赖
+
+> **注意**：插件模板目录是 embed 资源，发布插件时必须进 git。若仓库 `.gitignore` 全局忽略了 `*.md`，请显式放行 `templates/markdown/*.md`，否则拉取者编译会因缺文件失败。
 
 ## 消息撤回
 

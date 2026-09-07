@@ -5,11 +5,11 @@
 ## 完整开发流程
 
 ```
-plrx new-plugin <名字>    1. 生成骨架
-plrx add <模块路径>       2. 接入 main.go
+aurx new-plugin <名字>    1. 生成骨架
+aurx add <模块路径>       2. 接入 main.go
 编辑 plugins/<名字>/      3. 写指令逻辑 (IDE 自动补全, 见开发文档首页)
-plrx run                 4. 编译并启动, 群内验证
-改 → plrx run             5. 迭代: Go 是编译型语言, 每次改动重新编译
+aurx run                 4. 编译并启动, 群内验证
+改 → aurx run             5. 迭代: Go 是编译型语言, 每次改动重新编译
 ```
 
 ### 开发环境
@@ -21,8 +21,8 @@ plrx run                 4. 编译并启动, 群内验证
 
 | 载体 | 适用 | 接入 |
 |---|---|---|
-| 实例内 `plugins/` 目录 | 自己用 / 本地开发 | `plrx add mybot/plugins/名字` |
-| 独立 Go module | 发布给他人 | `plrx add github.com/某作者/某插件` |
+| 实例内 `plugins/` 目录 | 自己用 / 本地开发 | `aurx add mybot/plugins/名字` |
+| 独立 Go module | 发布给他人 | `aurx add github.com/某作者/某插件` |
 
 ## 导入已有插件
 
@@ -33,8 +33,8 @@ plrx run                 4. 编译并启动, 群内验证
 ```bash
 cp -r ~/my-plugin mybot/plugins/my-plugin
 cd mybot
-plrx add mybot/plugins/my-plugin   # 写入 main.go 空导入
-plrx run                           # 编译进二进制并启动
+aurx add mybot/plugins/my-plugin   # 写入 main.go 空导入
+aurx run                           # 编译进二进制并启动
 ```
 
 要求：目录含合法的 Go 包（`package xxx` + `init()` 中 `plugin.Register`）。
@@ -42,8 +42,8 @@ plrx run                           # 编译进二进制并启动
 ### 网络模块
 
 ```bash
-plrx add github.com/某作者/某插件   # 注入 import + go get 拉依赖
-plrx run
+aurx add github.com/某作者/某插件   # 注入 import + go get 拉依赖
+aurx run
 ```
 
 ## 发布插件
@@ -57,7 +57,7 @@ go mod init github.com/某作者/某插件
 git tag v0.1.0 && git push --tags
 ```
 
-使用者即可 `plrx add github.com/某作者/某插件`。
+使用者即可 `aurx add github.com/某作者/某插件`。
 
 **发布规范**：
 
@@ -66,21 +66,22 @@ git tag v0.1.0 && git push --tags
 - 敏感配置（密钥等）用 `Config` 声明，不硬编码进源码
 - 指令名小写英文为主，中文别名放 `Aliases`
 - 对外请求走 `ctx.Request`，勿自建裸 `http.Client`
+- 带 markdown 模板的插件：模板放包内 `templates/markdown/` 并挂 `TemplateFS`，**确认模板 `.md` 已进 git**（仓库 `.gitignore` 若忽略 `*.md` 需显式放行，否则拉取者编译因缺 embed 文件失败）
 
 ## 移除插件
 
 ```bash
 rm -rf mybot/plugins/my-plugin     # 删除目录
 # 同时从 main.go 删掉对应空导入行
-plrx run                           # 重新编译
+aurx run                           # 重新编译
 ```
 
 ## 修改框架 / 前端 / 插件后
 
 | 你改了 | 需要做什么 |
 |---|---|
-| 插件代码 | 重新编译实例：`plrx run` |
-| 新增插件目录 | `plrx add` 或手动加空导入 |
+| 插件代码 | 重新编译实例：`aurx run` |
+| 新增插件目录 | `aurx add` 或手动加空导入 |
 | 框架代码（lib/） | replace 指向本地，改动即时可见，重编实例 |
 | 管理台前端（框架 web/） | `cd web && pnpm build`，再重编实例 |
 | 更新框架 | `git pull`，重编实例；官方插件有变按报错调整 |

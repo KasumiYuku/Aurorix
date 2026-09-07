@@ -1,10 +1,10 @@
 package message
 
 import (
-	"Plrx/lib/assets"
-	"Plrx/lib/contract"
-	"Plrx/lib/templates"
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/contract"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
 
 // MarkdownMessage 支持图片内嵌与按钮。

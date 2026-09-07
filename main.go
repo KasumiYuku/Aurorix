@@ -1,12 +1,12 @@
 package main
 
 import (
-	"Plrx/lib/bot"
+	"github.com/KasumiYuku/Aurorix/lib/bot"
 
-	_ "Plrx/plugins/bind"
-	_ "Plrx/plugins/echo"
-	_ "Plrx/plugins/imagegen"
-	_ "Plrx/plugins/uptime"
+	_ "github.com/KasumiYuku/Aurorix/plugins/bind"
+	_ "github.com/KasumiYuku/Aurorix/plugins/echo"
+	_ "github.com/KasumiYuku/Aurorix/plugins/imagegen"
+	_ "github.com/KasumiYuku/Aurorix/plugins/uptime"
 )
 
 func main() {

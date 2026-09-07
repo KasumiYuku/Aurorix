@@ -497,7 +497,7 @@ export async function downloadLogs() {
   const blob = new Blob([lines + '\n'], { type: 'text/plain;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `polarix-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`
+  a.download = `aurorix-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`
   a.click()
   URL.revokeObjectURL(a.href)
 }

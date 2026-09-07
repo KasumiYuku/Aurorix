@@ -1,9 +1,9 @@
 package context
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/message"
-	"Plrx/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
 )
 
 type MessageContext struct {

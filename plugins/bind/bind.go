@@ -1,13 +1,17 @@
 package bind
 
 import (
-	"Plrx/lib/buttons"
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
-	"Plrx/lib/templates"
+	"embed"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/buttons"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
+
+//go:embed templates/markdown/*.md
+var templateFS embed.FS
 
 type bindArgs struct {
 	UID string `kong:"arg,name='uid',help='要绑定的 UID'"`
@@ -40,6 +44,7 @@ func init() {
 	self := &plugin.Plugin{}
 	self.Commands = commands
 	self.Id = "bind"
+	self.TemplateFS = templateFS
 	plugin.Register(self)
 }
 

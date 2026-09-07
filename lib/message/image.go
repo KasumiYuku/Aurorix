@@ -1,10 +1,10 @@
 package message
 
 import (
-	"Plrx/lib/assets"
-	"Plrx/lib/images"
-	"Plrx/lib/templates"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/images"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"strings"
 )
 

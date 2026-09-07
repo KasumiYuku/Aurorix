@@ -1,12 +1,12 @@
 package echo
 
 import (
-	"Plrx/lib/buttons"
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
-	"Plrx/lib/templates"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/buttons"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
 
 func init() {

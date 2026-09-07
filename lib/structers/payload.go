@@ -1,9 +1,9 @@
 package structers
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/message"
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/message"
 )
 
 // 推送内容解析

@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"Plrx/lib/config"
-	"Plrx/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/config"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

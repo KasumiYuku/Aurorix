@@ -1,10 +1,10 @@
 package context
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/message"
-	"Plrx/lib/templates"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
 
 // Sender 可发送的消息对象（Text/Markdown/Media 均实现）。
@@ -20,6 +20,8 @@ type MessageManager struct {
 	Target    constant.MessageOrigin
 	Qapi      *api.BotAPI
 	ref       *message.MsgRef
+	// PluginId 当前处理链路的插件归属; 模板解析时优先插件命名空间。
+	PluginId string
 }
 
 // 生成包含元信息的消息结构
@@ -150,13 +152,14 @@ func (manager *MessageManager) upload(fileType int, src any, name string) *messa
 }
 
 // MarkdownTemplate 填充 Markdown 模板并构造消息。
+// 插件命名空间优先, 未命中回落全局。
 func (manager *MessageManager) MarkdownTemplate(id string, args *templates.Args) (*message.MarkdownMessage, error) {
 	var content string
 	var err error
 	if args == nil {
-		content, err = templates.FillMarkdownTemplate(id, templates.Args{})
+		content, err = templates.FillFor(manager.PluginId, id, templates.Args{})
 	} else {
-		content, err = templates.FillMarkdownTemplate(id, *args)
+		content, err = templates.FillFor(manager.PluginId, id, *args)
 	}
 	if err != nil {
 		return nil, err
@@ -166,7 +169,7 @@ func (manager *MessageManager) MarkdownTemplate(id string, args *templates.Args)
 
 // UnsafeMarkdownTemplate 填充失败时 panic。
 func (manager *MessageManager) UnsafeMarkdownTemplate(id string, args *templates.Args) *message.MarkdownMessage {
-	content, err := templates.FillMarkdownTemplate(id, *args)
+	content, err := templates.FillFor(manager.PluginId, id, *args)
 	if err != nil {
 		panic(err)
 	}

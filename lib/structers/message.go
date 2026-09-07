@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"Plrx/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/message"
 )
 
 // Mention 消息中的 @ 提及。

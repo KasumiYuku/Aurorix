@@ -1,60 +1,69 @@
-# PolarixPlus
+# Aurorix
 
 ![Go](https://img.shields.io/badge/Go-1.26-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-> 用 Go 编写的面向 QQ 开放平台的官方机器人框架。
+> 基于 Go 语言构建的现代化 QQ 开放平台机器人框架
 
-<img width="1791" height="875" alt="image" src="https://github.com/user-attachments/assets/c64a8e2b-dbd4-4bd1-958e-335ad33bf4bc" />
+<p align="center">
+  <img alt="Aurorix Screenshot" src="https://github.com/user-attachments/assets/c64a8e2b-dbd4-4bd1-958e-335ad33bf4bc" width="100%" />
+</p>
 
 > [!NOTE]
-> 本项目是 [YearnstudioYangyi/Polarix](https://github.com/YearnstudioYangyi/Polarix/tree/dev) 的 fork 改版，在上游核心框架的基础上定制与扩展
-
-## 特性
-
-- **原生性能**：纯 Go 编译，单二进制分发，内存占用远低于解释型框架
-- **插件即 Go 包**：官方插件随框架分发，第三方插件 `plrx add` 一行接入，本地插件目录放入即用
-- **内置管理台**：Web UI 管理指令、插件、图床、定时任务、日志，支持热更新
-- **双通道接入**：Webhook 回调或 WebSocket 长连接，无公网 IP 也能运行
-- **低摩擦运维**：重复启动自动接管端口，进程内自重启，systemd 友好
+> **致谢与来源**
+> Aurorix 深度重构并扩展自优秀的开源项目 [Polarix](https://github.com/YearnstudioYangyi/Polarix)。我们在完整保留其核心架构与设计哲学的基础上，进行了大量功能延伸
+> 
+> 本项目严格遵循 MIT 协议，保留上游全部版权声明与提交历史，在此向 Polarix 的原作者及全体贡献者致以崇高敬意。若您寻求基础稳固、久经考验且官方活跃维护的原生体验，我们强烈推荐您优先关注并使用原版 [Polarix](https://github.com/YearnstudioYangyi/Polarix)
 
 ## 快速开始
 
-先看你要去哪——快速开始完成后，你的工作目录长这样：
+**环境要求**
+- [Go](https://go.dev/dl/) >= 1.26
+- [Git](https://git-scm.com/downloads)
 
-```
-你的工作目录/
-├── PolarixPlus/    框架源码（git clone 得到，只读参考，别往里放个人文件）
-└── mybot/          你的机器人实例（plrx new 创建，与框架平级）
+Aurorix 采用**框架与实例分离**的设计模式。实例的配置、数据与插件独立维护，确保框架源码纯净，支持无缝升级。初始化后的目录结构如下：
+
+```text
+workspace/
+├── Aurorix/      # 框架源码
+└── mybot/        # 机器人实例 (由 aurx CLI 生成)
 ```
 
-实例独立于框架目录之外：它的配置、模板、数据库、插件全部自理，框架源码保持纯净可随时更新或删除重 clone。
+### 安装与运行
 
 ```bash
-# 1. 获取框架源码（含 plrx 工具与全部库）
-git clone git@github.com:KasumiYuku/PolarixPlus.git
-cd PolarixPlus
+# 1. 获取框架源码
+git clone https://github.com/KasumiYuku/Aurorix.git
+cd Aurorix
 
-# 2. 安装脚手架 plrx（装入 Go 工具链目录）
+# 2. 安装脚手架工具 aurx
+# Windows 环境请替换为: go install ./tools/aurx
 make install
-export PATH="$PATH:$(go env GOPATH)/bin"   # 永久生效见文末 FAQ
 
-# 3. 回到上级目录创建实例。
-#    cd .. 是为了让 mybot 与框架平级 —— 实例不嵌在框架源码里。
-#    --framework 指向框架目录，实例靠它定位框架（go.mod replace 引用）。
+# 3. 创建机器人实例
 cd ..
-plrx new mybot --framework PolarixPlus
+aurx new mybot --framework Aurorix
 
 # 4. 接入官方示例插件（可选）
 cd mybot
-plrx add Plrx/plugins/bind
-
-# 5. 配置凭证（config.json 位于实例目录，由 plrx new 自动生成）
-vim config.json   # 填入 appid / secret / admin_password
-
-# 6. 启动
-plrx run
+aurx add [github.com/KasumiYuku/Aurorix/plugins/bind](https://github.com/KasumiYuku/Aurorix/plugins/bind)
 ```
+
+### 配置凭证
+
+进入 `mybot` 目录，编辑 `config.json` 文件，填入你的机器人凭证：
+- `appid` / `secret`：平台提供的 API 凭证
+- `admin_password`：自定义的管理台密码
+
+完成配置后，启动实例：
+
+```bash
+aurx run
+```
+
+> **验证状态**：启动成功后，终端将输出 `WebSocket 网关已启动`，并可通过 `http://127.0.0.1:8080/admin` 访问控制台。如出现持续重连或 Error 日志，请检查 `config.json` 凭证是否正确。
+
+---
 
 启动后：
 
@@ -67,7 +76,6 @@ plrx run
 mybot/
 ├── main.go              插件接入清单（空导入）
 ├── config.json          凭证与运行配置
-├── templates/markdown/  消息模板（实例独有，可自由增改）
 ├── data/                数据库（data/bot.db）与运行时数据
 └── plugins/             本地插件
 ```
@@ -91,9 +99,9 @@ mybot/
 
 | 来源 | 做法 |
 |---|---|
-| **官方示例** | `plrx add Plrx/plugins/bind`（`echo` / `imagegen` / `uptime` 同理） |
-| **网络第三方** | `plrx add github.com/某作者/某插件`（自动拉取依赖） |
-| **本地插件文件夹** | 放入实例 `plugins/` 目录 → `plrx add` 接入 |
+| **官方示例** | `aurx add github.com/KasumiYuku/Aurorix/plugins/bind`（`echo` / `imagegen` / `uptime` 同理） |
+| **网络第三方** | `aurx add github.com/某作者/某插件`（自动拉取依赖） |
+| **本地插件文件夹** | 放入实例 `plugins/` 目录 → `aurx add` 接入 |
 
 本地插件导入：
 
@@ -101,19 +109,33 @@ mybot/
 # 把已有的插件文件夹放进实例
 cp -r ~/my-plugin mybot/plugins/my-plugin
 cd mybot
-plrx add mybot/plugins/my-plugin   # 写入 main.go 接入清单
-plrx run                           # 编译并启动
+aurx add mybot/plugins/my-plugin   # 写入 main.go 接入清单
+aurx run                           # 编译并启动
 ```
 
 ### 创建自己的插件
 
 ```bash
 cd mybot
-plrx new-plugin hello              # 生成插件骨架
-plrx add mybot/plugins/hello       # 接入
+aurx new-plugin hello              # 生成插件骨架
+aurx add mybot/plugins/hello       # 接入
 vim plugins/hello/hello.go         # 写你的指令逻辑
-plrx run                           # 重新编译并运行
+aurx run                           # 重新编译并运行
 ```
+
+生成后目录长这样：
+
+```
+mybot/plugins/hello/
+├── hello.go              插件主体：注册 + 指令逻辑
+└── templates/
+    └── markdown/
+        └── Hello.md      模板文件（随插件编译进二进制，用户无需手动放置）
+```
+
+生成的 `hello.go` 自带模板装载三件套：`//go:embed templates/markdown/*.md` 声明、`templateFS` 变量、`TemplateFS: templateFS` 挂载。在指令里用 `ctx.MarkdownTemplate("Hello", &templates.Args{...})` 就能按模板发消息（用法细节见[开发文档](docs/README.md)）。
+
+群里发送 `/hello` 验证。改代码 → `aurx run`，循环迭代。
 
 完整的插件开发流程与 API 参考见[开发文档](docs/README.md)。
 
@@ -202,28 +224,34 @@ plrx run                           # 重新编译并运行
 ## 常见问题
 
 <details>
-<summary>plrx 装好了但提示命令找不到？</summary>
+<summary><b>终端提示 <code>aurx: command not found</code>？</b></summary>
 
-`make install` 把 plrx 装入 Go 工具链目录，需要它在 PATH 中：
+<br>
+这通常是因为 Go 的二进制目录未加入系统环境变量。请根据你的操作系统执行以下命令，并<b>重启终端</b>：
 
+**Linux / macOS**
 ```bash
-# bash / zsh
-echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc   # 或 ~/.zshrc
-source ~/.bashrc
+# Bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc
 
-# fish
+# Zsh
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
+
+# Fish
 fish_add_path (go env GOPATH)/bin
-
-# Windows (PowerShell)
-$env:Path += ";$(go env GOPATH)\bin"   # 或写入系统环境变量
 ```
 
+**Windows (PowerShell)**
+```powershell
+$path = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$path;$(go env GOPATH)\bin", "User")
+```
 </details>
 
 <details>
 <summary>重复启动会端口冲突吗？</summary>
 
-不会。新实例自动终止占用同一端口的旧实例并接管。被 systemd 守护时设置 `POLARIX_SUPERVISED=1`，面板重启直接退出交由守护拉起。
+不会。新实例自动终止占用同一端口的旧实例并接管。被 systemd 守护时设置 `AURORIX_SUPERVISED=1`，面板重启直接退出交由守护拉起。
 
 </details>
 
@@ -243,6 +271,10 @@ cd web && pnpm build   # 产物嵌入 lib/admin/dist，重新编译实例即生�
 
 </details>
 
-## 许可证
+## 开源协议 (License)
 
-MIT License。本项目为 [YearnstudioYangyi/Polarix](https://github.com/YearnstudioYangyi/Polarix/tree/dev) 的个人 fork 改版。
+本项目采用 [MIT LICENSE](LICENSE) 开源
+
+* 核心架构与原版历史代码版权归原 [Polarix](https://github.com/YearnstudioYangyi/Polarix) 作者及贡献者所有
+* 后续新增特性与重构代码版权归 Aurorix 维护者所有
+* 您可以自由地使用、修改和分发本项目，但请务必保留原作者及本项目的版权声明

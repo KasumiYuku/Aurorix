@@ -1,11 +1,11 @@
 package admin
 
 import (
-	"Plrx/lib/config"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"github.com/KasumiYuku/Aurorix/lib/config"
 	"net/http"
 	"sync"
 	"time"

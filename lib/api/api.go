@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"Plrx/lib/assets"
-	"Plrx/lib/constant"
-	errorx "Plrx/lib/error"
-	"Plrx/lib/requests"
-	"Plrx/lib/token"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	errorx "github.com/KasumiYuku/Aurorix/lib/error"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/token"
 )
 
 // BotAPI 平台客户端门面: 持有凭证、HTTP 基建与各域 API 实例。

@@ -1,13 +1,17 @@
 package uptime
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
-	"Plrx/lib/templates"
+	"embed"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"strings"
 )
+
+//go:embed templates/markdown/*.md
+var templateFS embed.FS
 
 func init() {
 	commands := make([]*plugin.Command, 0)
@@ -25,8 +29,9 @@ func init() {
 	})
 
 	self := &plugin.Plugin{
-		Id:       "uptime",
-		Commands: commands,
+		Id:         "uptime",
+		Commands:   commands,
+		TemplateFS: templateFS,
 	}
 	plugin.Register(self)
 }

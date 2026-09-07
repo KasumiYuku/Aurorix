@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"Plrx/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
 )
 
 const defaultTokenAPI = "https://bots.qq.com/app/getAppAccessToken"

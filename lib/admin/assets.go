@@ -1,7 +1,7 @@
 package admin
 
 import (
-	"Plrx/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

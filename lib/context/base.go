@@ -1,10 +1,10 @@
 package context
 
 import (
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/requests"
-	"Plrx/lib/storage"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/storage"
 )
 
 type Context struct {

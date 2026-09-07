@@ -1,8 +1,8 @@
 package buttons
 
 import (
-	"Plrx/lib/context"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/context"
 )
 
 type RenderData struct {

@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"Plrx/lib/api"
-	"Plrx/lib/constant"
-	"Plrx/lib/logx"
-	"Plrx/lib/middleware"
-	"Plrx/lib/structers"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/middleware"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
 
 	"github.com/gorilla/websocket"
 )

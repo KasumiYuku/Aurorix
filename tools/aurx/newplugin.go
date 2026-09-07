@@ -7,10 +7,10 @@ import (
 )
 
 // cmdNewPlugin 在当前实例生成插件骨架: plugins/<name>/<name>.go。
-// 用法: plrx new-plugin <插件名> [--dir 目录]
+// 用法: aurx new-plugin <插件名> [--dir 目录]
 func cmdNewPlugin(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("用法: plrx new-plugin <插件名> [--dir plugins]")
+		return fmt.Errorf("用法: aurx new-plugin <插件名> [--dir plugins]")
 	}
 	name := sanitizeModule(args[0])
 	dir := "plugins"
@@ -21,7 +21,7 @@ func cmdNewPlugin(args []string) error {
 		}
 	}
 	dir = filepath.Join(dir, name)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "templates/markdown"), 0o755); err != nil {
 		return err
 	}
 	mod := moduleName()
@@ -32,15 +32,20 @@ func cmdNewPlugin(args []string) error {
 	content := fmt.Sprintf(`package %s
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
+	"embed"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
 )
+
+//go:embed templates/markdown/*.md
+var templateFS embed.FS
 
 func init() {
 	plugin.Register(&plugin.Plugin{
-		Id:   %q,
-		Name: %q,
+		Id:         %q,
+		Name:       %q,
+		TemplateFS: templateFS,
 		Commands: []*plugin.Command{
 			{
 				Prefix:   %q,
@@ -63,8 +68,13 @@ func cmd(ctx *context.MessageContext) error {
 	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("插件骨架已生成: %s\n", file)
-	fmt.Printf("接入: plrx add %s\n", importPath)
-	fmt.Println("编写指令后 plrx run 即可运行。完整 API 见框架 docs/。")
+	if err := os.WriteFile(
+		filepath.Join(dir, "templates/markdown", "Hello.md"),
+		[]byte("# {{title}}\n{{body}}\n"), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("插件骨架已生成: %s（模板目录 templates/markdown, 已随插件 embed）\n", file)
+	fmt.Printf("接入: aurx add %s\n", importPath)
+	fmt.Println("编写指令后 aurx run 即可运行。完整 API 见框架 docs/。")
 	return nil
 }

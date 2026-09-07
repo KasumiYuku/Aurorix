@@ -1,8 +1,9 @@
 package plugin
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"io/fs"
 )
 
 type CommandHandleFunc func(*context.MessageContext) error
@@ -34,6 +35,8 @@ type Plugin struct {
 	Config         []ConfigField
 	ValidateConfig func(map[string]any) error
 	ApplyConfig    func(map[string]any) error
+	// TemplateFS 插件自带 markdown 模板, 注册时自动装载到插件命名空间。
+	TemplateFS fs.FS
 }
 
 type ConfigField struct {
