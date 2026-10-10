@@ -6,7 +6,7 @@
 > 基于 Go 语言构建的现代化 QQ 开放平台机器人框架
 
 <p align="center">
-  <img alt="Aurorix Screenshot" src="https://github.com/user-attachments/assets/9c0d1ada-08e4-4a4d-9ada-d5ab42c0d93a" width="100%" />
+  <img alt="Aurorix Screenshot" src="https://p.qlogo.cn/homework/0/hw_h_2ky2ufbezsw0kks6ac9c09528a4e/0" width="100%" />
 </p>
 
 > [!NOTE]
