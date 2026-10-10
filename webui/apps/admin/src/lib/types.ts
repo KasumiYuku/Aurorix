@@ -175,8 +175,9 @@ export interface CoreField {
   key: string
   label: string
   desc?: string
-  kind: 'text' | 'secret' | 'number' | 'bool' | 'intlist' | 'strlist' | 'multiselect' | 'select' | 'note'
+  kind: 'text' | 'secret' | 'number' | 'bool' | 'intlist' | 'strlist' | 'textlist' | 'multiselect' | 'select' | 'note'
   options?: string[]
+  placeholder?: string
   hot: boolean
   restart: boolean
   value: unknown

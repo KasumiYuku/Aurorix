@@ -21,6 +21,8 @@ type coreField struct {
 	Restart bool     `json:"restart"`
 	Value   any      `json:"value"`
 	Set     bool     `json:"set"`
+	// Placeholder 输入框里的示例提示(灰色占位文字), 前端直接渲染
+	Placeholder string `json:"placeholder,omitempty"`
 }
 
 var coreSpecs = []coreField{
@@ -39,7 +41,7 @@ var coreSpecs = []coreField{
 	{Key: "retry_when", Label: "消息重试错误码", Desc: "每行一个业务错误码", Kind: "intlist", Hot: true},
 	{Key: "upload_threshold", Label: "分片上传阈值(字节)", Kind: "number", Hot: true},
 	{Key: "footer_buttons_enabled", Label: "启用底部按钮", Desc: "关掉后保留下面的配置, 但不再往消息里追加", Kind: "bool", Hot: true},
-	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的一行按钮。一行一个, 格式「标签 | 类型 | 参数 | 选项」, 类型 counter(计数)/command(指令)/link(链接)。例: +1 | counter | 感谢 {{count}} 次", Kind: "strlist", Hot: true},
+	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的底部按钮。一行 = 键盘上一行, 同一行用逗号分隔多个按钮; 每个按钮写 标签|类型|参数, 类型有 counter(计数)/command(指令)/link(链接)/repeat(复读: 把触发这条回复的原消息填进用户输入框), 选项跟在参数后: ; k=v", Placeholder: "+1 | repeat , 文档 | link | https://github.com/KasumiYuku/Aurorix\n帮助 | command | /help", Kind: "textlist", Hot: true},
 }
 
 func handleGetConfig(w http.ResponseWriter, r *http.Request) {
