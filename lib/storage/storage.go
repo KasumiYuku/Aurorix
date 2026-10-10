@@ -263,6 +263,67 @@ func (store *Store) Has(key string) (bool, error) {
 	return exists == 1, nil
 }
 
+// incrMu 串行化自增。自增是「读-改-写」, 而 SQLite 的读锁升级在并发下可能直接返回 BUSY,
+// 光靠 busy_timeout 挡不住; 本进程内互斥即可 —— 框架本身按单实例运行。
+var incrMu sync.Mutex
+
+// Incr 把整数计数加上 delta 并返回新值; 键不存在时从 0 起算。
+// 读取与写回在同一个事务里完成, 并发点击同一个按钮不会丢计数;
+// 键上存的不是整数时明确报错, 而不是悄悄从 0 重来。
+func (store *Store) Incr(key string, delta int64) (int64, error) {
+	if err := store.validate(key); err != nil {
+		return 0, err
+	}
+	database, err := ensureDB()
+	if err != nil {
+		return 0, err
+	}
+
+	incrMu.Lock()
+	defer incrMu.Unlock()
+
+	tx, err := database.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin incr: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var current int64
+	var encoded []byte
+	err = tx.QueryRow(
+		"SELECT value FROM kv_data WHERE scope = ? AND namespace = ? AND key = ?",
+		store.scope, store.namespace, key,
+	).Scan(&encoded)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		current = 0
+	case err != nil:
+		return 0, fmt.Errorf("read incr value: %w", err)
+	default:
+		if err := json.Unmarshal(encoded, &current); err != nil {
+			return 0, fmt.Errorf("键 %q 存的不是整数, 无法自增: %w", key, err)
+		}
+	}
+
+	next := current + delta
+	if encoded, err = json.Marshal(next); err != nil {
+		return 0, fmt.Errorf("marshal incr value: %w", err)
+	}
+	if _, err = tx.Exec(`
+		INSERT INTO kv_data (scope, namespace, key, value, updated_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(scope, namespace, key) DO UPDATE SET
+			value = excluded.value,
+			updated_at = CURRENT_TIMESTAMP
+	`, store.scope, store.namespace, key, encoded); err != nil {
+		return 0, fmt.Errorf("write incr value: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit incr: %w", err)
+	}
+	return next, nil
+}
+
 func (store *Store) Delete(key string) error {
 	if err := store.validate(key); err != nil {
 		return err
