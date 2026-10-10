@@ -301,7 +301,7 @@ cd webui && pnpm build   # 等价于 make web；产物嵌入 lib/admin/dist，�
 
 本地 workspace（自用 / 开发）：进对应目录 `git pull`，再重编实例即可 —— `go.mod` 里 replace 指向本地目录，不走网络。
 
-发布 / 网络插件：发版方打 tag（`git tag v0.2.0 && git push --tags`）；使用方用 `aurx update [模块]` 更新（等价于 `go get -u` + `go mod tidy` + 编译校验），再 `aurx run`。
+发布 / 网络插件：发版方打 tag（`git tag v0.2.0 && git push --tags`）；使用方 `aurx update` 更新（`all` 或空参 = 全部；也可只写模块名的一段，如 `aurx update music`），再 `aurx run`。
 
 版本与发布约定见 [docs/publishing.md](docs/publishing.md)。
 

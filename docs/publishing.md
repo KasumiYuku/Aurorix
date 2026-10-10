@@ -87,11 +87,13 @@ git push --tags       # 推上去, 使用方 go get 才拿得到这个版本
 **使用方**
 
 ```bash
-aurx update                            # 更新实例依赖的全部模块 + 编译校验
-aurx update github.com/某作者/某插件     # 只更新指定插件
+aurx update                      # 更新实例依赖的全部模块 + 编译校验
+aurx update all                  # 同上
+aurx update 某插件               # 只更新指定模块, 名字可只写一段(如 aurorix-music-plugin / music)
+aurx update -n                   # 只看看会更新什么, 不动文件
 ```
 
-`aurx update` 内部就是 `go get -u` + `go mod tidy` + `go build ./...`；它不动 replace 到本地目录的模块（那是你自己的代码）。更新完用 `aurx run` 重启实例。
+`aurx update` 内部就是 `go get -u` + `go mod tidy` + `go build ./...`；它不动 replace 到本地目录的模块（那是你自己的代码）。在**插件源码目录**里跑 `aurx update` 就是更新该插件自己的依赖。更新完用 `aurx run` 重启实例。
 
 **CI**：框架仓与各插件仓都带 `.github/workflows/ci.yml`（格式 / 静态检查 / 竞态测试 / 构建；框架额外校验内嵌产物是否与源码一致）。发版前先确认它是绿的。
 
