@@ -27,7 +27,7 @@ import (
 //	+1 | counter | 感谢支持，当前 {{count}} 次 ; dedup=user , 帮助 | command | /help
 //	文档 | link | https://example.com
 //
-// 类型: counter(计数) / command(指令) / link(链接) / repeat(复读, 把触发这条回复的原消息填进输入框); 选项是 k=v, 多个用 ';' 隔开。
+// 类型: counter(计数) / command(指令) / link(链接) / repeat(复读, 把触发这条回复的原消息填进输入框) / image(图片, 点击把那一段 URL 的图发给点击者); 选项是 k=v, 多个用 ';' 隔开。
 //
 // 两个必须知道的平台事实:
 //   - 按钮上的文字在发送那一刻就写死了 —— 平台没有消息编辑接口, 所以计数只能出现在点击后的回复里,
@@ -53,6 +53,8 @@ const (
 	FooterLink FooterKind = "link"
 	// FooterRepeat 复读: 点击把「触发这条回复的那条原消息」填进输入框, auto=1 时直接发送。
 	FooterRepeat FooterKind = "repeat"
+	// FooterImage 图片: 点击把那一段 URL 的图发给点击者。
+	FooterImage FooterKind = "image"
 )
 
 // FooterSpec 一行配置解析后的结果。
@@ -90,6 +92,7 @@ var footerAllowedOptions = map[FooterKind][]string{
 	FooterCommand: {"key", "auto", "style", "visited"},
 	FooterLink:    {"key", "style", "visited"},
 	FooterRepeat:  {"auto", "style", "visited"},
+	FooterImage:   {"style", "visited"},
 }
 
 // ParseFooter 解析底部按钮配置。空行与 # 开头的注释行跳过。
@@ -209,6 +212,8 @@ func parseFooterKind(raw string) (FooterKind, error) {
 		return FooterLink, nil
 	case "repeat", "复读", "回填":
 		return FooterRepeat, nil
+	case "image", "图片", "图":
+		return FooterImage, nil
 	}
 	return "", fmt.Errorf("类型 %q 不认识, 只能是 counter(计数) / command(指令) / link(链接) / repeat(复读)", raw)
 }
@@ -298,6 +303,11 @@ func (s FooterSpec) validate() error {
 		if auto, ok := s.Options["auto"]; ok && auto != "0" && auto != "1" {
 			return fmt.Errorf("auto 只能是 0 或 1, 收到 %q", auto)
 		}
+	case FooterImage:
+		target, err := url.Parse(s.Arg)
+		if err != nil || target.Host == "" || (target.Scheme != "http" && target.Scheme != "https") {
+			return fmt.Errorf("image 的第 3 段要是 http(s) 图片链接, 收到 %q", s.Arg)
+		}
 	}
 	return nil
 }
@@ -345,6 +355,8 @@ func footerButton(spec FooterSpec, index int, originalInput string) (Button, boo
 			return Button{}, false
 		}
 		btn.SetAutoCommand(originalInput, spec.option("auto", "0") == "1", false)
+	case FooterImage:
+		btn.SetCallbackWithoutHandle(strconv.Itoa(index))
 	}
 	btn.SetPermission(AllUser)
 	btn.SetUnsupportedTip(defaultUnsupportedTip)
@@ -389,6 +401,8 @@ func footerDefaultVisited(kind FooterKind) string {
 		return "已投"
 	case FooterCommand, FooterRepeat:
 		return "已填入"
+	case FooterImage:
+		return "已发送"
 	}
 	return ""
 }
@@ -516,11 +530,21 @@ func handleFooterClick(ctx *context.CallbackContext) error {
 		return fmt.Errorf("底部按钮 #%d 已不在配置里(配置改过?), 忽略本次点击", index)
 	}
 	spec := specs[index]
-	if spec.Kind != FooterCounter {
+	switch spec.Kind {
+	case FooterCounter:
+		return footerCount(ctx, spec)
+	case FooterImage:
+		return footerImage(ctx, spec)
+	default:
 		// command / link 是纯客户端行为, 不会走到回调分发
 		return nil
 	}
-	return footerCount(ctx, spec)
+}
+
+// footerImage 图片按钮: 点击后把配置里那段 URL 的图发给点击者。
+// 不 @ 点击者 —— 图是同一张, 群里谁点的没区别。
+func footerImage(ctx *context.CallbackContext, spec FooterSpec) error {
+	return ctx.Msg().Image(spec.Arg, spec.Label).Send()
 }
 
 // footerCount 计数按钮: 按去重规则决定算不算一次, 然后按模板回复。
