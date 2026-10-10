@@ -1,18 +1,18 @@
 package context
 
 import (
-	"Plrx/lib/qqapi"
+	"github.com/KasumiYuku/Aurorix/lib/api"
 )
 
 type ApplyJoinGroupContext struct {
 	*Context
-	Answer  string // 回答答案
+	Answer  string
 	groupId string
 	userId  string
 	eventId string
 }
 
-func (ctx *ApplyJoinGroupContext) Init(requestId, groupId, userId string, client *qqapi.Client) {
+func (ctx *ApplyJoinGroupContext) Init(requestId, groupId, userId string, client *api.BotAPI) {
 	ctx.Context = &Context{}
 	ctx.Context.Init("", requestId, client)
 	ctx.eventId = requestId

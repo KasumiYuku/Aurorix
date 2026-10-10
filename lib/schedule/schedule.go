@@ -1,36 +1,37 @@
 package schedule
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/qqapi"
-	"log"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"sync"
 	"time"
 )
+
+var logger = logx.New("schedule")
 
 // HandleFunc 定时任务处理函数
 type HandleFunc func(ctx *context.ScheduleContext) error
 
 // Job 定时任务定义
-// Cron 与 Interval 二选一; 同时设置时优先 Interval
-// 可预设推送目标 (GroupId / UserId / Target), 触发时自动写入 ScheduleContext
 type Job struct {
-	Id        string                 // 任务唯一 ID
-	PluginId  string                 // 所属插件 ID
-	Cron      string                 // 5 段 cron: 分 时 日 月 周, 如 "0 9 * * *" 每天 9:00
-	Interval  time.Duration          // 固定间隔, 如 time.Hour
-	Immediate bool                   // Interval 任务是否立即执行一次
-	GroupId   string                 // 预设群 OpenID (可选)
-	UserId    string                 // 预设用户 OpenID (可选)
-	Target    constant.MessageOrigin // 预设发送目标; 未设时按 GroupId/UserId 推断
+	Id        string
+	PluginId  string
+	Cron      string
+	Interval  time.Duration
+	Immediate bool
+	GroupId   string
+	UserId    string
+	Target    constant.MessageOrigin
 	Handle    HandleFunc
 }
 
 type registeredJob struct {
 	job      *Job
 	cron     *cronExpr
-	lastFire time.Time // cron: 上次触发的分钟刻度
+	lastFire time.Time
 	paused   bool
 	cancel   chan struct{}
 	stopOnce sync.Once
@@ -45,7 +46,7 @@ func (rj *registeredJob) stop() {
 var (
 	jobs       []*registeredJob
 	jobsLock   sync.RWMutex
-	client     *qqapi.Client
+	client     *api.BotAPI
 	stopCh     chan struct{}
 	started    bool
 	cronLoopOn bool
@@ -53,22 +54,21 @@ var (
 )
 
 // Register 注册定时任务 (插件 init 中调用, 风格同 buttons.RegisterCallbackFunc)
-// 若 Id 已存在则覆盖旧任务 (旧任务会被取消)
 func Register(job *Job) {
 	if job == nil {
-		log.Printf("[schedule] 忽略空 Job")
+		logger.Warnf("忽略空 Job")
 		return
 	}
 	if job.Id == "" {
-		log.Printf("[schedule] 忽略无 Id 的 Job (plugin=%v)", job.PluginId)
+		logger.Warnf("忽略无 Id 的 Job (plugin=%v)", job.PluginId)
 		return
 	}
 	if job.Handle == nil {
-		log.Printf("[schedule] 忽略无 Handle 的 Job: %v", job.Id)
+		logger.Warnf("忽略无 Handle 的 Job: %v", job.Id)
 		return
 	}
 	if job.Interval <= 0 && job.Cron == "" {
-		log.Printf("[schedule] 忽略未设置 Cron/Interval 的 Job: %v", job.Id)
+		logger.Warnf("忽略未设置 Cron/Interval 的 Job: %v", job.Id)
 		return
 	}
 
@@ -79,7 +79,7 @@ func Register(job *Job) {
 	if job.Interval <= 0 {
 		expr, err := parseCron(job.Cron)
 		if err != nil {
-			log.Printf("[schedule] Job %v cron 解析失败: %v", job.Id, err)
+			logger.Errorf("Job %v cron 解析失败: %v", job.Id, err)
 			return
 		}
 		rj.cron = expr
@@ -89,7 +89,7 @@ func Register(job *Job) {
 	replaced := false
 	for i, existing := range jobs {
 		if existing.job.Id == job.Id {
-			log.Printf("[schedule] 警告: Job Id=%v 已存在, 覆盖旧任务", job.Id)
+			logger.Warnf("Job Id=%v 已存在, 覆盖旧任务", job.Id)
 			existing.stop()
 			jobs[i] = rj
 			replaced = true
@@ -101,7 +101,6 @@ func Register(job *Job) {
 	}
 	jobsLock.Unlock()
 
-	// 调度器已启动时, 为新任务拉起对应循环
 	startMu.Lock()
 	running := started
 	needCron := running && job.Interval <= 0 && !cronLoopOn
@@ -117,49 +116,65 @@ func Register(job *Job) {
 	} else if needCron {
 		go runCronLoop()
 	}
+	NotifyChanged()
 }
 
 // Cancel 取消并移除任务, 不可恢复. 返回是否找到该任务
 func Cancel(id string) bool {
 	jobsLock.Lock()
-	defer jobsLock.Unlock()
+	found := false
 	for i, rj := range jobs {
 		if rj.job.Id == id {
 			rj.stop()
 			jobs = append(jobs[:i], jobs[i+1:]...)
-			log.Printf("[schedule] 已取消 Job %v", id)
-			return true
+			logger.Infof("已取消 Job %v", id)
+			found = true
+			break
 		}
 	}
-	return false
+	jobsLock.Unlock()
+	if found {
+		NotifyChanged()
+	}
+	return found
 }
 
 // Pause 暂停任务 (保留注册, 到点不触发). 返回是否找到该任务
 func Pause(id string) bool {
 	jobsLock.Lock()
-	defer jobsLock.Unlock()
+	found := false
 	for _, rj := range jobs {
 		if rj.job.Id == id {
 			rj.paused = true
-			log.Printf("[schedule] 已暂停 Job %v", id)
-			return true
+			logger.Infof("已暂停 Job %v", id)
+			found = true
+			break
 		}
 	}
-	return false
+	jobsLock.Unlock()
+	if found {
+		NotifyChanged()
+	}
+	return found
 }
 
 // Resume 恢复已暂停的任务. 返回是否找到该任务
 func Resume(id string) bool {
 	jobsLock.Lock()
-	defer jobsLock.Unlock()
+	found := false
 	for _, rj := range jobs {
 		if rj.job.Id == id {
 			rj.paused = false
-			log.Printf("[schedule] 已恢复 Job %v", id)
-			return true
+			logger.Infof("已恢复 Job %v", id)
+			found = true
+			break
 		}
 	}
-	return false
+	jobsLock.Unlock()
+	if found {
+		NotifyChanged()
+	}
+	return found
 }
 
 // IsPaused 查询任务是否暂停. exists 表示任务是否仍注册
@@ -194,15 +209,15 @@ func GetJobCount() int {
 }
 
 // Start 启动调度器 (main 中在 qqapi 初始化后调用)
-func Start(c *qqapi.Client) {
+func Start(c *api.BotAPI) {
 	startMu.Lock()
 	defer startMu.Unlock()
 	if started {
-		log.Printf("[schedule] 调度器已在运行")
+		logger.Infof("调度器已在运行")
 		return
 	}
 	if c == nil {
-		log.Printf("[schedule] 无法启动: qqapi.Client 为空")
+		logger.Errorf("无法启动: api.BotAPI 为空")
 		return
 	}
 	client = c
@@ -226,7 +241,7 @@ func Start(c *qqapi.Client) {
 		cronLoopOn = true
 		go runCronLoop()
 	}
-	log.Printf("[schedule] 调度器已启动 (interval=%d, cron=%d)", intervalN, cronN)
+	logger.Infof("调度器已启动 (interval=%d, cron=%d)", intervalN, cronN)
 }
 
 // Stop 停止整个调度器 (所有任务循环退出, 注册表保留)
@@ -239,7 +254,7 @@ func Stop() {
 	close(stopCh)
 	started = false
 	cronLoopOn = false
-	log.Printf("[schedule] 调度器已停止")
+	logger.Infof("调度器已停止")
 }
 
 func runInterval(rj *registeredJob) {
@@ -262,7 +277,6 @@ func runInterval(rj *registeredJob) {
 }
 
 func runCronLoop() {
-	// 对齐到下一整秒后每秒检查, 同一分钟只触发一次
 	now := time.Now()
 	time.Sleep(time.Until(now.Truncate(time.Second).Add(time.Second)))
 	ticker := time.NewTicker(time.Second)
@@ -293,24 +307,28 @@ func runCronLoop() {
 			for _, rj := range toFire {
 				go fire(rj)
 			}
+			if len(toFire) > 0 {
+				NotifyChanged()
+			}
 		}
 	}
 }
 
 func tryFire(rj *registeredJob) {
-	jobsLock.RLock()
+	jobsLock.Lock()
 	if rj.paused {
-		jobsLock.RUnlock()
+		jobsLock.Unlock()
 		return
 	}
-	// 已被 Cancel 时 cancel channel 已关闭
 	select {
 	case <-rj.cancel:
-		jobsLock.RUnlock()
+		jobsLock.Unlock()
 		return
 	default:
 	}
-	jobsLock.RUnlock()
+	rj.lastFire = time.Now()
+	jobsLock.Unlock()
+	NotifyChanged()
 	fire(rj)
 }
 
@@ -318,27 +336,28 @@ func fire(rj *registeredJob) {
 	job := rj.job
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[schedule] Job %v (plugin=%v) panic: %v", job.Id, job.PluginId, r)
+			logger.Errorf("Job %v (plugin=%v) panic: %v", job.Id, job.PluginId, r)
 		}
 	}()
 
+	if job.PluginId != "" && !plugin.Enabled(job.PluginId) {
+		return
+	}
 	ctx := &context.ScheduleContext{}
 	ctx.Init(client)
 	ctx.JobId = job.Id
-	ctx.PluginId = job.PluginId
+	ctx.MessageManager.PluginId = job.PluginId
 	if job.PluginId != "" {
 		ctx.BindStorage(job.PluginId, "schedule:"+job.Id)
 	}
 	applyJobTarget(ctx, job)
 
-	log.Printf("[schedule] 触发 Job %v (plugin=%v)", job.Id, job.PluginId)
+	logger.Infof("触发 Job %v (plugin=%v)", job.Id, job.PluginId)
 	if err := job.Handle(ctx); err != nil {
-		log.Printf("[schedule] Job %v (plugin=%v) error: %v", job.Id, job.PluginId, err)
+		logger.Errorf("Job %v (plugin=%v) error: %v", job.Id, job.PluginId, err)
 	}
 }
 
-// 将 Job 上预设的推送目标写入上下文
-// Target 为 PrivateMessage 时强制私聊; 否则: 有 GroupId 走群, 仅有 UserId 走私聊
 func applyJobTarget(ctx *context.ScheduleContext, job *Job) {
 	if job.GroupId != "" {
 		ctx.SetGroupId(job.GroupId)
@@ -358,4 +377,59 @@ func applyJobTarget(ctx *context.ScheduleContext, job *Job) {
 	if job.UserId != "" {
 		ctx.SetMessageOrigin(constant.PrivateMessage)
 	}
+}
+
+// JobInfo 任务管理视图。
+type JobInfo struct {
+	ID         string `json:"id"`
+	PluginID   string `json:"plugin_id"`
+	Kind       string `json:"kind"`
+	Cron       string `json:"cron,omitempty"`
+	IntervalMS int64  `json:"interval_ms,omitempty"`
+	Immediate  bool   `json:"immediate"`
+	Paused     bool   `json:"paused"`
+	LastFire   int64  `json:"last_fire"`
+	NextFire   int64  `json:"next_fire"`
+}
+
+// Jobs 快照当前任务列表。
+func Jobs() []JobInfo {
+	jobsLock.RLock()
+	defer jobsLock.RUnlock()
+	out := make([]JobInfo, 0, len(jobs))
+	now := time.Now()
+	for _, rj := range jobs {
+		info := JobInfo{
+			ID:        rj.job.Id,
+			PluginID:  rj.job.PluginId,
+			Immediate: rj.job.Immediate,
+			Paused:    rj.paused,
+		}
+		if rj.job.Interval > 0 {
+			info.Kind = "interval"
+			info.IntervalMS = rj.job.Interval.Milliseconds()
+		} else {
+			info.Kind = "cron"
+			info.Cron = rj.job.Cron
+			if !rj.paused && rj.cron != nil {
+				info.NextFire = nextCronFire(rj.cron, now).UnixMilli()
+			}
+		}
+		if !rj.lastFire.IsZero() {
+			info.LastFire = rj.lastFire.UnixMilli()
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+func nextCronFire(expr *cronExpr, from time.Time) time.Time {
+	t := from.Truncate(time.Minute).Add(time.Minute)
+	for range 2880 {
+		if expr.match(t) {
+			return t
+		}
+		t = t.Add(time.Minute)
+	}
+	return time.Time{}
 }

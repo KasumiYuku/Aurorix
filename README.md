@@ -1,393 +1,290 @@
-## Polarix 北极星
+# Aurorix
 
-> QQ官方机器人 轻量开发框架
->
-> Without AI feature
+![Go](https://img.shields.io/badge/Go-1.26-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-### 配置文件
-在根目录下新建`config.json`, 并按照下方格式填写
+> 基于 Go 语言构建的现代化 QQ 开放平台机器人框架
+
+<p align="center">
+  <img alt="Aurorix Screenshot" src="https://github.com/user-attachments/assets/9c0d1ada-08e4-4a4d-9ada-d5ab42c0d93a" width="100%" />
+</p>
+
+> [!NOTE]
+> Aurorix 基于 [Polarix](https://github.com/YearnstudioYangyi/Polarix) 重构并继续扩展，保留了上游版权声明与提交历史。
+> 
+> 如果你只需要原版 Polarix 的使用体验，请优先阅读上游项目；如果你需要管理台、插件控制台、图床聚合、定时任务、WebSocket 网关、主动推送等扩展能力，可以继续看这里。
+
+## 快速开始
+
+**环境要求**
+- [Go](https://go.dev/dl/) >= 1.26
+- [Git](https://git-scm.com/downloads)
+
+Aurorix 采用**框架与实例分离**的设计模式。实例的配置、数据与插件独立维护，确保框架源码纯净，支持无缝升级。初始化后的目录结构如下：
+
+```text
+workspace/
+├── Aurorix/      # 框架源码
+└── mybot/        # 机器人实例 (由 aurx CLI 生成)
+```
+
+### 安装与运行
+
+```bash
+# 1. 获取框架源码
+git clone https://github.com/KasumiYuku/Aurorix.git
+cd Aurorix
+
+# 2. 安装脚手架工具 aurx
+# Windows 环境请替换为: go install ./tools/aurx
+make install
+
+# 3. 创建机器人实例
+cd ..
+aurx new mybot --framework Aurorix
+
+# 4. 接入官方示例插件（可选）
+cd mybot
+aurx add github.com/KasumiYuku/Aurorix/plugins/bind
+```
+
+### 配置凭证
+
+进入 `mybot` 目录，编辑 `config.json` 文件，填入你的机器人凭证：
+- `appid` / `secret`：平台提供的 API 凭证
+- `admin_password`：自定义的管理台密码
+
+完成配置后，启动实例：
+
+```bash
+aurx run
+```
+
+> **验证状态**：启动成功后，终端会输出管理台地址 `http://127.0.0.1:8080/admin`。`protocol` 为 `websocket` 时还会看到 `WebSocket 网关已启动`；默认 `webhook` 模式则监听 `/webhook`，需要在 QQ 开放平台配置回调地址。
+
+---
+
+启动后：
+
+- 机器人在线。示例插件已就绪：群里 @ 机器人发送 `/uptime` 查看服务状态
+- 管理台在 `http://127.0.0.1:8080/admin`（端口取配置 `port`），登录密码 `admin_password`
+
+实例结构：
+
+```
+mybot/
+├── main.go              插件接入清单（空导入）
+├── config.json          凭证与运行配置
+├── data/                数据库（data/bot.db）与运行时数据
+└── plugins/             本地插件
+```
+
+## 管理台
+
+| 页面 | 能力 |
+|---|---|
+| 概览 | 运行时长 / 内存 / goroutine / 消息计数 / 网关状态 / 最近日志 |
+| 日志 | 级别与来源筛选、关键字搜索、SSE 实时推送、导出 |
+| 插件 | 目录卡片、配置编辑（保存即热更）、启停、访问控制 |
+| 图床 | Provider 启停 / 优先级 / 配置，白名单直通 |
+| 定时任务 | 任务列表、暂停 / 恢复 |
+| 设置 | 核心参数分组，即时生效项与需重启项分离 |
+
+## 插件
+
+插件是一个 Go 包：`init()` 中注册指令，接入后在构建时编译进二进制。
+
+### 导入插件（三种来源）
+
+| 来源 | 做法 |
+|---|---|
+| **官方示例** | `aurx add github.com/KasumiYuku/Aurorix/plugins/bind`（`echo` / `imagegen` / `uptime` 同理） |
+| **网络第三方** | `aurx add github.com/某作者/某插件`（自动拉取依赖） |
+| **实例内插件** | 放入实例 `plugins/` 目录 → `aurx add <实例module>/plugins/<插件名>` 接入 |
+
+本地插件导入：
+
+```bash
+# 把已有的插件文件夹放进实例
+cp -r ~/my-plugin mybot/plugins/my-plugin
+cd mybot
+aurx add mybot/plugins/my-plugin   # mybot 是当前实例 go.mod 的 module 名
+aurx run                           # 编译并启动
+```
+
+### 创建自己的插件
+
+```bash
+cd mybot
+aurx new-plugin hello              # 生成插件骨架
+aurx add mybot/plugins/hello       # 接入
+vim plugins/hello/hello.go         # 写你的指令逻辑
+aurx run                           # 重新编译并运行
+```
+
+生成后目录长这样：
+
+```
+mybot/plugins/hello/
+├── hello.go              插件主体：注册 + 指令逻辑
+└── templates/
+    └── markdown/
+        └── Hello.md      模板文件（随插件编译进二进制，用户无需手动放置）
+```
+
+生成的 `hello.go` 自带模板装载三件套：`//go:embed templates/markdown/*.md` 声明、`templateFS` 变量、`TemplateFS: templateFS` 挂载。在指令里用 `ctx.MarkdownTemplate("Hello", &templates.Args{...})` 就能按模板发消息（用法细节见[开发文档](docs/README.md)）。
+
+> `aurx new-plugin` 会在终端打印准确的 `aurx add ...` 路径。上面的 `mybot/plugins/hello` 只在实例 module 名为 `mybot` 时成立。
+
+群里发送 `/hello` 验证。改代码 → `aurx run`，循环迭代。
+
+完整的插件开发流程与 API 参考见[开发文档](docs/README.md)。
+
+## 配置
+
+`config.json` 是唯一配置文件（位于实例目录）。完整字段与可订阅事件：
+
+<details>
+<summary>config.json 全字段（点击展开）</summary>
+
 ```json
 {
   "port": 8080,
-  "appid": "10000",
-  "secret": "11111",
-  "proxy": "https://api.sgroup.qq.com"
+  "appid": "你的机器人AppID",
+  "secret": "你的机器人AppSecret",
+  "proxy": "https://api.bot.qq.com",
+  "gateway_url": "",
+  "protocol": "webhook",
+  "intents": ["GROUP_AT_MESSAGE_CREATE", "INTERACTION_CREATE"],
+  "database": "data/bot.db",
+  "admin_password": "设置一个管理面板密码",
+  "global_markdown": false,
+  "markdown_verify_image": false,
+  "retry_when": [11253, 630006],
+  "upload_threshold": 3145728,
+  "log_level": "info",
+  "prefixes": ["/", "#", ""],
+  "plugin_settings": {},
+  "plugin_access": {}
 }
 ```
 
-额外参数:
+| 字段 | 说明 |
+|---|---|
+| `port` | 服务与管理台端口 |
+| `appid` / `secret` | 开放平台机器人凭证 |
+| `proxy` | API 反代地址。服务器 IP 动态时，在固定 IP 设备反代 QQ API 并填其地址，绕过 IP 白名单 |
+| `gateway_url` | 自定义网关地址。留空连官方网关；填 `wss://...` 可接 webhook 转 websocket 中转站（仅 `websocket` 模式生效） |
+| `protocol` | `webhook`（平台推回调）或 `websocket`（长连接网关） |
+| `intents` | websocket 模式订阅的事件名 |
+| `database` | SQLite 数据库路径（实例默认 `data/bot.db`） |
+| `admin_password` | 管理台密码；留空仅本机可访问 |
+| `global_markdown` | 所有文字按 Markdown 渲染，图片/按钮内联 |
+| `markdown_verify_image` | Markdown 图片转存失败时中断发送 |
+| `retry_when` | 命中这些 QQ 业务错误码自动重试 |
+| `upload_threshold` | 超过该字节数走分片上传（默认 3MB） |
+| `log_level` | 控制台日志级别，可在线热更 |
+| `prefixes` | 指令前缀符号，`""` 表示允许无前缀裸指令；默认 `["/", "#", ""]` |
+| `plugin_settings` | 插件配置，面板修改即时生效 |
+| `plugin_access` | 插件访问控制 |
 
-- uin: 机器人QQ号
-- uid: 不知道是哪个UID, 可以在196173384群里发送`转[机器人QQ号]`查询, 其他方法正在寻找, 后续跟进
+**可订阅事件（intents）**
 
-(这两个参数可以不填写, 并非必须参数)
+| 事件 | 说明 |
+|---|---|
+| `GROUP_AT_MESSAGE_CREATE` | 群里 @ 机器人 |
+| `GROUP_MESSAGE_CREATE` | 群内全部消息 |
+| `C2C_MESSAGE_CREATE` | 私聊消息 |
+| `INTERACTION_CREATE` | 互动事件（按钮回调等） |
+| `GROUP_JOIN_REQUEST` | 入群申请 |
+| `GROUP_MEMBER_ADD` / `GROUP_MEMBER_REMOVE` | 成员入群 / 退群 |
+| `MESSAGE_AUDIT_PASS` / `MESSAGE_AUDIT_REJECT` | 消息审核通过 / 驳回 |
+| `GROUP_ADD_ROBOT` / `GROUP_DEL_ROBOT` | 机器人被添加 / 移除 |
+| `GROUP_MSG_RECEIVE` / `GROUP_MSG_REJECT` | 群消息接收开启 / 关闭 |
+| `C2C_MSG_RECEIVE` / `C2C_MSG_REJECT` | 私聊消息接收开启 / 关闭 |
 
-#### 配置文件说明
-- port    服务端口
-- appid   机器人ID
-- secret  机器人AppSecret
-- proxy   代理地址
+</details>
 
-> 什么是代理地址?
-> 
-> 代理地址是为了QQ开放平台IP白名单限制所使用的功能, 当你的服务器处于动态IP的时候, 可以在一个固定IP的设备上搭建反代服务, 然后填写对应的地址
+### 接入方式
 
-### WebHook配置
-在QQ开放平台里配置, WebHook填写`你的地址:端口/webhook`
+| 方式 | 适用场景 |
+|---|---|
+| **Webhook**（默认） | 有公网地址或反代，平台把事件推送到 `/webhook` |
+| **WebSocket** | 无公网回调地址，框架主动连网关长连接，管理台与主动推送不受影响 |
+| **WebSocket + 中转站** | 无公网回调地址时：平台回调指向 webhook 转 websocket 中转站，框架用 `gateway_url` 连中转站取事件，官方地址验证由中转站负责 |
 
-事件按照你的需求勾选, 也可以一次性全部选择
+图床配置独立存于实例 `assets.json`（不入版本库），管理台可视化编辑并热更新。上传按 `priority` 从高到低尝试，失败自动切换；`whitelist` 命中 URL 原样透传；密钥字段不回显。
 
-***
+内置的 `qqbot` 是官方富媒体图床：不需要任何第三方账号，默认启用，排在所有第三方图床之后兜底 —— 第三方全挂、甚至一个都没配时，它把图传进平台自己的存储，取回一条 24 小时有效的预签名直链写进 markdown，图照样能内嵌显示。它按会话上传（群里的文件不能跨到单聊用），所以只对"正在发送的图"生效；又因为拿到的是预签名直链，宿主默认不对它做上传后探测。要把这条通道关掉，在管理台把 `qqbot` 关掉并保存即可。
 
-### 组织方式
-框架使用`插件`的形式来增加功能
+## 开发文档
 
-### 插件管理面板
+| 文档 | 内容 |
+|---|---|
+| [docs/](docs/README.md) | 文档首页：架构总览、开发环境、第一个插件、导航 |
+| [docs/commands.md](docs/commands.md) | 指令：字段、前缀系统、参数解析、子指令、权限 |
+| [docs/message.md](docs/message.md) | 消息：构造器、组合消息、Markdown 模板、按钮、图片 |
+| [docs/schedule.md](docs/schedule.md) | 定时任务 |
+| [docs/storage.md](docs/storage.md) | 配置热更与数据存储 |
+| [docs/events.md](docs/events.md) | 群事件、按钮回调、HTTP 客户端 |
+| [docs/push.md](docs/push.md) | 主动推送：HTTP 端点完整协议与使用 |
+| [docs/api.md](docs/api.md) | API 全景：流式消息、BotAPI 门面、HTTP 客户端、日志、常量 |
+| [docs/publishing.md](docs/publishing.md) | 插件开发流程、发布与生态接入 |
 
-启动服务后访问 `/admin` 查看插件目录，每个插件进入独立的 `/admin/plugins/{id}` 配置页面。页面支持跟随系统、浅色和深色三种主题，选择会保存在浏览器中。插件配置保存到 `config.json` 的 `plugin_settings` 字段并即时生效。生图插件可在此配置 OpenAI 兼容接口，用户通过 `/draw <图片描述>` 生成图片；发送指令时附带一张或多张图片会自动调用 `/images/edits`，将附件作为参考图，最多使用 16 张。
+## 常见问题
 
-未设置 `admin_password` 时，管理页面仅允许从服务器本机访问。需要远程管理时，在 `config.json` 中增加管理密码：
+<details>
+<summary><b>终端提示 <code>aurx: command not found</code>？</b></summary>
 
-```json
-{
-  "admin_password": "请设置高强度密码"
-}
+<br>
+这通常是因为 Go 的二进制目录未加入系统环境变量。请根据你的操作系统执行以下命令，并<b>重启终端</b>：
+
+**Linux / macOS**
+```bash
+# Bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc
+
+# Zsh
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
+
+# Fish
+fish_add_path (go env GOPATH)/bin
 ```
 
-远程访问时使用 HTTP Basic Auth，用户名固定为 `admin`，密码为 `admin_password`。生产环境应通过 HTTPS 反向代理访问管理页面。
+**Windows (PowerShell)**
+```powershell
+$path = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$path;$(go env GOPATH)\bin", "User")
+```
+</details>
 
-插件通过 `Plugin.Config` 声明配置项，不需要自行实现管理页面或 HTTP 接口。`password` 字段只向面板返回是否已配置，留空保存时会保留原值：
+<details>
+<summary>重复启动会端口冲突吗？</summary>
 
-```go
-plugin.Register(&plugin.Plugin{
-    Id:          "example",
-    Name:        "示例插件",
-    Description: "插件配置示例",
-    Config: []plugin.ConfigField{
-        {Key: "enabled", Label: "启用插件", Type: "boolean"},
-        {Key: "endpoint", Label: "接口地址", Type: "text"},
-        {Key: "api_key", Label: "API Key", Type: "password"},
-    },
-    ValidateConfig: validateConfig,
-    ApplyConfig:    applyConfig,
-})
+不会。新实例自动终止占用同一端口的旧实例并接管。被 systemd 守护时设置 `AURORIX_SUPERVISED=1`，面板重启直接退出交由守护拉起。
+
+</details>
+
+<details>
+<summary>修改了前端（web/）？</summary>
+
+```bash
+cd web && pnpm build   # 产物嵌入 lib/admin/dist，重新编译实例即生效
 ```
 
-`ValidateConfig` 在写入配置前执行，`ApplyConfig` 在启动加载和面板保存后执行。
+</details>
 
-指令还可以声明生命周期钩子：
+<details>
+<summary>管理台安全吗？</summary>
 
-```go
-&plugin.Command{
-    Prefix: "/example",
-    Handle: handle,
-    PermissionDenied: func(ctx *context.MessageContext) error {
-        return ctx.Text("你无权使用此指令").Send()
-    },
-    HandleError: func(ctx *context.MessageContext, commandErr error) error {
-        return ctx.Text("指令执行失败").Send()
-    },
-}
-```
+登录使用 `admin_password`，会话为 HttpOnly Cookie（可保留 30 天）。密码留空仅本机可访问。登录失败会触发按来源 IP 的临时限流（5 分钟窗口），防密码爆破。
 
-`PermissionDenied` 会在角色权限、私聊限制或黑白名单拒绝时调用。`HandleError` 会在 `Handle` 返回非空错误或发生 panic 后调用；原始错误及错误处理函数自身的错误仍会写入日志。子指令使用实际命中的子指令钩子。
+</details>
 
-管理面板也会为所有插件自动提供访问控制，无需插件额外声明。可以设置插件默认规则，并为具体指令或子指令覆盖：
+## 开源协议 (License)
 
-- `关闭限制`：所有用户和群均可使用。
-- `白名单`：用户 OpenID 或群 OpenID 命中任一名单时允许使用。
-- `黑名单`：用户 OpenID 或群 OpenID 命中任一名单时拒绝使用。
-- 指令选择 `继承插件规则` 时使用插件默认规则。
+本项目采用 [MIT LICENSE](LICENSE) 开源
 
-访问控制保存在 `config.json` 的 `plugin_access` 字段。群聊优先使用发送者的 `member_openid`，缺失时使用 `union_openid`；私聊使用 `user_openid`。被拒绝的指令会静默忽略。
-
-#### 新建插件
-在`plugins`(注意不是`lib/plugin`)目录下新建一个文件夹, 然后放入你的插件代码
-
-如下是一个插件模板
-```go
-package echo
-
-import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
-	"Plrx/lib/structers"
-)
-
-func init() {
-	var commands []*plugin.Command
-	commands = append(commands, &plugin.Command{
-		Prefix:    "/echo",
-		Role:      constant.RoleMember,
-		Describle: "回显",
-		Handle:    echoHandle,
-	})
-
-	self := plugin.PluginConfig{
-		Id:       "echo",
-		Commands: commands,
-	}
-	plugin.Register(&self)
-}
-
-func echoHandle(ctx *context.Context) error {
-	return ctx.Client.SendGroupMessage(*ctx.Message, ctx.Message.GroupId)
-}
-```
-
-#### 插件元信息
-
-- Id          插件ID, 用于日志排查
-- Commands    指令列表, 用于注册指令
-
-#### 新建指令
-一个指令需要`前缀` / `使用权限` / `描述`(暂无功能) / `处理函数`
-
-并且可以额外添加`解析器`及`解析模板`
-
-##### 前缀
-> Prefix
-指令前缀, 只有以该前缀开头的指令会传入插件
-
-根据注册顺序, 后注册的插件如果跟之前注册插件的前缀相同, 会发生**覆盖**
-
-##### 使用权限
-> Role | 枚举值: **constant.RoleMember** | **constant.RoleAdmin** | **constant.RoleOwner**
-最低使用指令的成员身份, 依次为**普通成员**、**管理员**和**群主**
-
-不满足身份要求会静默失败
-
-##### 处理函数
-> Handle | type HandleFunc func(*context.Context) error
-
-其中`*context.Context`为上下文对象, 其API用法见后文
-
-函数需要返回一个`error`, 会显示在日志里, 不会发送到QQ里
-
-##### 解析器&解析模板
-> Parser & ParserTarget
-> 
-> 两者必须合用, 否则可能引发panic或预期之外的行为
-
-解析器接受一个`Parser`接口, 其需要一个`Parse(rawMsg string, result any) error`函数, 该函数接收**原始消息**及**接收者指针**并返回一个`error`
-
-- 当`Parser`没有被指定时, 默认使用`DefaultParser`(lib/parser/default.go), 除此之外还提供一个`PositionalParser`解析器
-
-`DefaultParser`会将**原始消息**直接传给**接收者**, 不做任何处理
-
-`PositionalParser`必须和`ParserTarget`配合使用, 会将指令参数解析到结构体里
-
-- 当`ParserTarget`没有指定时, 默认使用`string`类型
-
-当解析器为`PositionalParser`, 必须指定`ParserTarget`为一个从**结构体**构造的`reflect.Type`对象(`reflect.TypeOf`), 可以参考**ping**插件
-
-
-#### 注册插件
-
-在`plugins/register.go`中**匿名导入**你的插件所在的包
-
-```go
-import	_ "Plrx/plugins/ping"
-
-```
-
-***
-
-### 上下文对象
-
-这里假设传入的Context被`ctx`变量接收
-
-#### 发送消息
-有两种方式, 一种是手动构造`Message`对象, 而更推荐的是调用`Reply`快捷函数
-
-##### Reply函数
-
-直接调用传入的`ctx`的`Reply`函数:
-
-```go
-ctx.Reply("", structers.PlainText)
-```
-
-第一个参数是**消息内容**, 第二个参数是**消息类型**
-
-**消息类型**为`MessageType`枚举, 可以选择`PlainText`及`Markdown`两种类型, 第一个为`纯文本`, 第二个为`Markdown`
-
-**消息内容**在消息类型为`Markdown`的时候, 会被渲染为Markdown
-
-##### Message对象
-> 该对象的定义位于**lib/structers/msg.go**
-
-1. 构造Message对象
-
-你至少需要定义如下内容:
-
-- Content
-- MessageType
-
-参数的含义与Reply中的一致
-
-2. 发送消息
-
-调用`ctx.Client.SendGroupMessage`或`ctx.Client.SendPrivateMessage`(根据发送目标)
-
-当调用`ctx.Client.SendGroupMessage`时, 默认为**主动推送**消息, 如果需要采取**被动回复**(这两者区别见QQ官方文档), 需要在`Message`结构体中填入`MessageId`参数, 指定回复消息的ID
-
-两个函数的**第一个参数**均为`Message`对象, 第二个参数分别为**群OpenID**及**用户ID**, 其中群OpenID的查询可以使用`echo`插件下的`/groupid`指令
-
-#### 消息内容
-
-##### 原始消息
-
-位于`ctx.Message.Content`
-
-##### 解析器产物
-
-位于`ctx.Parserd`, 必须进行**类型断言**
-
-##### 消息ID
-
-位于`ctx.Message.MessageId`
-
-##### 消息对象
-
-位于`ctx.Message`
-
-#### 发送者信息
-
-包含在`ctx.Message`中, 为其下的`UserId`、`UnionId`及`GroupId`字段
-
-#### 消息来源
-
-目前仅存在两种枚举: `PrivateMessage`及`GroupMessage`
-
-#### 公共请求对象
-
-插件的请求应该调用上下文中的`Requests`, 该对象目前支持两种请求方式: `ctx.Requests.Get`及`ctx.Requests.Post`
-
-##### Get请求
-
-参数: `Get(url string, result any, headers map[string]string)`
-
-- url 请求目标
-- result 返回结果绑定目标(需要包含json标签的结构体), nil时不解析
-- headers 请求头
-
-##### Post请求
-
-参数: `Post(url string, body any, result any, headers map[string]string)`
-
-- url 请求目标
-- body 请求体(可以为`[]byte`或者为可以被`json.Marshal`的对象)
-- result/headers 同上
-
-***
-
-### Markdown模板
-
-可以在`templates/markdown`下面存放多个`.md`文件, 每个文件为一个Markdown模板, 非`.md`文件会被忽略
-
-在Markdown模板里, 可以使用插值语法":
-```markdown
-## {{ aaa }}
-```
-
-文件名(**不包含**.md后缀)将作为模板ID
-
-通过调用`lib/templates`的`FillMarkdownTemplate(Id string, args Args)`函数可以填充模板
-
-该函数需要两个参数
-
-- Id 模板ID
-- args 参数列表
-
-#### 参数列表
-
-是由`type Args map[string]any`定义的, 可以通过类似于:
-```go
-templates.Args{
-	"name":        data.Data.Name,
-	"look":        data.Data.Look,
-}
-```
-的方式直接声明, 原本的`map[string]string`不再使用
-
-参数既可以是`string`也可以是`int, int64, float64`
-
-#### 可能的错误
-
-当模板ID不存在时, 返回错误
-
-当参数列表args传入的参数不满足模板里定义的**所有**插值时, 返回错误
-
-当参数列表args传入的结构体中有无法使用的类型时, 返回错误
-
-#### 追加图片元信息
-
-QQ的Markdown无法自适应图片大小, 必须追加元信息才能正常显示:
-```markdown
-![alt #300px #400px](https://aaa.com/bbb.jpg)
-```
-可以调用`ProcessMarkdownImages`辅助函数, 该函数会自动处理所有图片引用并追加元信息
-
-***
-
-### 按钮
-
-代码位于`lib/structers/buttons/buttons.go`, 示范在`echo`插件的`/uid`指令
-
-一个消息可以附带一个`Keyboard`, 一个`Keyboard`最多五行, 每行最多五个按钮, 共25个
-
-#### 创建按钮
-
-通过`&buttons.Keyboard{}`初始化一个变量(假设为`keyboard`), 作为承载按钮的变量
-
-然后调用`keyboard.AppendButton`, 如下
-
-```go
-button, err := keyboard.AppendButton("ID", "点击前文本", "点击后文本", ButtonStyle.Blue, 0)
-```
-
-- `"ID"` 按钮ID, 在一个Keyboard内必须唯一
-- `"点击前文本"` & `"点击后文本"` 不予解释
-- `ButtonStyle.Blue` 按钮边框样式, 是`lib/constant/Button/ButtonStyle.go`下的枚举, 只支持`Blue`和`Gray`
-- `0` 在哪一行追加按钮, 从**0**开始, 最大为**4**
-
-需要判断`err`是否为`nil`
-
-`button`为`*Button`类型, 是修改按钮的指针, 不得进行值拷贝, 否则修改操作会失效
-
-#### 设置按钮行为
-
-调用`button`的函数
-
-- SetAutoCommand 设置自动发送消息, 参数依次为: 消息内容、是否自动发送(仅私聊有效)、是否拉起图片选择(仅手机端有效, 目前无法使用, 请保持`false`)
-- SetHref 设置跳转链接, 参数为: 链接地址, 需要携带协议头
-- SetCallback 设置回调, 参数为: 回调数据(当前框架没有处理事件回调, 后续会进行补充)
-
-#### 设置按钮权限
-
-调用`button.SetPermission`函数, 传入一个`lib/constant/Button/ActionPermissionType`下的枚举, 注意这个函数只应该传入`Admin`(仅管理员可用)或者`AllUser`(所有人可用)
-
-当需要设置部分用户可用时, 需要使用`button.SetUserWhiteList`, 并传入一个`[]string`作为允许使用的用户的*OpenID*
-
-#### 设置其他内容
-
-##### 不支持按钮的情况
-
-调用`button.SetUnsupportedTip`设置不支持按钮的时候的提示文本
-
-***
-
-### TODO
-
-- [x] 支持按钮功能
-- [ ] 数据库API
-- [ ] 按钮回调事件
-
-#### 不会支持的功能
-- 所有与频道相关的功能
-
-## 许可证
-
-MIT
+* 核心架构与原版历史代码版权归原 [Polarix](https://github.com/YearnstudioYangyi/Polarix) 作者及贡献者所有
+* 后续新增特性与重构代码版权归 Aurorix 维护者所有
+* 您可以自由地使用、修改和分发本项目，但请务必保留原作者及本项目的版权声明

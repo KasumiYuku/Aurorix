@@ -1,9 +1,11 @@
 package buttons
 
 import (
-	"log"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"sync"
 )
+
+var logger = logx.New("buttons")
 
 var CallbackFuncMap map[string]CallbackButtonHandleFunc = map[string]CallbackButtonHandleFunc{}
 
@@ -21,7 +23,7 @@ func RegisterCallbackFunc(id string, handle CallbackButtonHandleFunc) {
 	CallbackFuncMapLock.Lock()
 	defer CallbackFuncMapLock.Unlock()
 	if _, ok := CallbackFuncMap[id]; ok {
-		log.Printf("警告: 对于ID为 %v 注册的回调函数, 覆盖了之前存在的处理函数", id)
+		logger.Warnf("对于ID为 %v 注册的回调函数, 覆盖了之前存在的处理函数", id)
 	}
 	CallbackFuncMap[id] = handle
 }

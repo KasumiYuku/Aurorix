@@ -11,7 +11,6 @@ const (
 
 func (require RoleRequired) CanUse(user RoleRequired) bool {
 	if require == "" {
-		// 留空时默认为成员可用
 		return true
 	}
 	switch require {

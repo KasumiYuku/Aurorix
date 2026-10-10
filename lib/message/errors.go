@@ -20,7 +20,7 @@ func (e *JSONMarshalError) Error() string {
 	return fmt.Sprintf("Failed when marshal: %v", e.Err)
 }
 
-func (e *JSONMarshalError) Unwarp() error {
+func (e *JSONMarshalError) Unwrap() error {
 	return e.Err
 }
 

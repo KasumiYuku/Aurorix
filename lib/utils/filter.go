@@ -2,15 +2,18 @@ package utils
 
 import "strings"
 
+// FilterAt 仅剥离首部的 @token, 保留剩余原文排版(换行/缩进不折叠)。
 func FilterAt(raw string) string {
-	raw = NormalizeWhitespace(raw)
-	args := strings.Split(raw, " ")
-	if len(args) < 2 {
-		return raw
+	if strings.HasPrefix(raw, "<@") {
+		if i := strings.IndexByte(raw, '>'); i >= 0 {
+			return strings.TrimLeft(raw[i+1:], " \t\n")
+		}
 	}
-	if strings.HasPrefix(args[0], "<@") || strings.HasPrefix(args[0], "@") {
-		return strings.Join(args[1:], " ")
-	} else {
-		return raw
+	if strings.HasPrefix(raw, "@") {
+		if i := strings.IndexAny(raw, " \t\n"); i >= 0 {
+			return strings.TrimLeft(raw[i:], " \t\n")
+		}
+		return ""
 	}
+	return raw
 }

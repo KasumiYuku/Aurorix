@@ -1,117 +1,202 @@
+// Package admin 管理台: 鉴权、JSON API 与 SPA 静态托管。
 package admin
 
 import (
-	"Plrx/lib/config"
-	"Plrx/lib/plugin"
-	"crypto/subtle"
-	_ "embed"
+	"embed"
+	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/config"
+	"github.com/KasumiYuku/Aurorix/lib/plugin"
+	"io"
+	"io/fs"
 	"net"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
-//go:embed panel.html
-var panelPage []byte
+//go:embed dist
+var distFS embed.FS
 
-//go:embed plugin.html
-var pluginPage []byte
+// H JSON 响应便捷别名, 语义同 gin.H。
+type H = map[string]any
 
-func Register(router *gin.Engine, password string) {
-	admin := router.Group("/admin")
-	admin.Use(access(password))
-	admin.GET("", func(c *gin.Context) {
-		c.Data(http.StatusOK, "text/html; charset=utf-8", panelPage)
-	})
-	admin.GET("/plugins/:id", func(c *gin.Context) {
-		if _, ok := plugin.ManagedPluginByID(c.Param("id")); !ok {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", pluginPage)
-	})
-	admin.GET("/api/plugins", func(c *gin.Context) {
-		c.JSON(http.StatusOK, plugin.ManagedPlugins())
-	})
-	admin.GET("/api/plugins/:id", func(c *gin.Context) {
-		managed, ok := plugin.ManagedPluginByID(c.Param("id"))
-		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"error": "插件不存在"})
-			return
-		}
-		c.JSON(http.StatusOK, managed)
-	})
-	admin.PUT("/api/plugins/:id", func(c *gin.Context) {
-		var input map[string]any
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
-			return
-		}
-		prepared, err := plugin.PrepareConfiguration(c.Param("id"), input)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if err := config.SavePluginSettings(c.Param("id"), prepared); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
-			return
-		}
-		if err := plugin.ApplyConfiguration(c.Param("id"), prepared); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-	})
-	admin.PUT("/api/plugins/:id/access", func(c *gin.Context) {
-		var input plugin.AccessConfig
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式无效"})
-			return
-		}
-		prepared, err := plugin.PrepareAccessConfiguration(c.Param("id"), input)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		persisted := config.AccessConfig{
-			Default:  toConfigAccessRule(prepared.Default),
-			Commands: make(map[string]config.AccessRule, len(prepared.Commands)),
-		}
-		for path, rule := range prepared.Commands {
-			persisted.Commands[path] = toConfigAccessRule(rule)
-		}
-		if err := config.SavePluginAccess(c.Param("id"), persisted); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存访问控制失败"})
-			return
-		}
-		plugin.ApplyAccessConfiguration(c.Param("id"), prepared)
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-	})
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }
 
-func toConfigAccessRule(rule plugin.AccessRule) config.AccessRule {
-	return config.AccessRule{Mode: rule.Mode, Users: rule.Users, Groups: rule.Groups}
+func readJSON(r *http.Request, dst any) error {
+	return json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst)
 }
 
-func access(password string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if password == "" {
-			host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-			if err == nil && net.ParseIP(host).IsLoopback() {
-				c.Next()
+// Deps 管理台依赖。
+type Deps struct {
+	Assets  *assets.Manager
+	Client  *api.BotAPI
+	Gateway func() any
+	Control Control
+	Profile *profileStore
+}
+
+// Control 运行控制回调, 由 main 注入。
+type Control struct {
+	Restart    func()
+	Stop       func()
+	Supervised bool
+}
+
+// Register 挂载全部 /admin 路由。
+func Register(mux *http.ServeMux, deps Deps) {
+	sess := newSessions()
+	bus := newLiveBus(deps)
+
+	mux.HandleFunc("POST /admin/api/login", handleLogin(sess))
+	mux.HandleFunc("POST /admin/api/logout", handleLogout(sess))
+
+	api := http.NewServeMux()
+	api.HandleFunc("GET /admin/api/me", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, H{"ok": true, "admin": true})
+	})
+	api.HandleFunc("GET /admin/api/overview", handleOverview(deps))
+	api.HandleFunc("GET /admin/api/profile", handleProfileGet(deps))
+	api.HandleFunc("POST /admin/api/profile/refresh", handleProfileRefresh(deps))
+	api.HandleFunc("GET /admin/api/stream", bus.handleStream)
+	api.HandleFunc("GET /admin/api/logs", handleLogs)
+	registerPluginRoutes(api)
+	if deps.Assets != nil {
+		registerAssetsRoutes(api, deps.Assets)
+	}
+	api.HandleFunc("GET /admin/api/jobs", handleJobs)
+	api.HandleFunc("POST /admin/api/jobs/{id}/pause", handleJobPause)
+	api.HandleFunc("GET /admin/api/config", handleGetConfig)
+	api.HandleFunc("PUT /admin/api/config", handlePutConfig(deps))
+	api.HandleFunc("POST /admin/api/system/restart", func(w http.ResponseWriter, r *http.Request) {
+		if !deps.Control.Supervised {
+			writeJSON(w, http.StatusConflict, H{"error": "未声明受外部守护(AURORIX_SUPERVISED=1), 面板重启会与守护进程各拉一个实例互杀; 请手动重启或在受管模式下使用"})
+			return
+		}
+		triggerControl(w, deps.Control.Restart, "重启")
+	})
+	api.HandleFunc("POST /admin/api/system/stop", func(w http.ResponseWriter, r *http.Request) {
+		triggerControl(w, deps.Control.Stop, "停止")
+	})
+	api.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusNotFound, H{"error": "接口不存在"})
+	})
+	mux.Handle("/admin/api/", requireAuth(sess, api))
+
+	for id, ui := range plugin.WebUIs() {
+		prefix := "/" + id
+		api := http.NewServeMux()
+		if ui.API != nil {
+			ui.API(api)
+		}
+		api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, http.StatusNotFound, H{"error": "接口不存在"})
+		})
+		mux.Handle(prefix+"/api/", requireAuth(sess, http.StripPrefix(prefix, api)))
+
+		if ui.SPA != nil {
+			mux.Handle(prefix+"/", http.StripPrefix(prefix, plugin.ServeSPA(ui.SPA)))
+		} else {
+			mux.HandleFunc(prefix+"/", func(w http.ResponseWriter, r *http.Request) {
+				http.NotFound(w, r)
+			})
+		}
+	}
+
+	mux.HandleFunc("/", serveSPA)
+}
+
+func requireAuth(sess *sessions, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := config.Current()
+		if cfg.AdminPassword == "" {
+			if isLoopback(r.RemoteAddr) {
+				next.ServeHTTP(w, r)
 				return
 			}
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "远程管理未启用，请在 config.json 中设置 admin_password"})
+			writeJSON(w, http.StatusServiceUnavailable, H{"error": "远程管理未启用，请在 config.json 中设置 admin_password"})
 			return
 		}
-		username, provided, ok := c.Request.BasicAuth()
-		validUser := subtle.ConstantTimeCompare([]byte(username), []byte("admin")) == 1
-		validPassword := subtle.ConstantTimeCompare([]byte(provided), []byte(password)) == 1
-		if !ok || !validUser || !validPassword {
-			c.Header("WWW-Authenticate", `Basic realm="Bot admin", charset="UTF-8"`)
-			c.AbortWithStatus(http.StatusUnauthorized)
+		token, err := r.Cookie(sessionCookie)
+		if err != nil || !sess.valid(token.Value, cfg.AdminPassword) {
+			writeJSON(w, http.StatusUnauthorized, H{"error": "未登录或会话已失效"})
 			return
 		}
-		c.Next()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func triggerControl(w http.ResponseWriter, action func(), name string) {
+	if action == nil {
+		writeJSON(w, http.StatusNotImplemented, H{"error": name + "控制未启用"})
+		return
 	}
+	writeJSON(w, http.StatusAccepted, H{"ok": true, "notice": name + "已触发"})
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		action()
+	}()
+}
+
+func serveSPA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		writeJSON(w, http.StatusNotFound, H{"error": "接口不存在"})
+		return
+	}
+
+	name := strings.TrimPrefix(r.URL.Path, "/admin")
+	name = strings.TrimPrefix(name, "/")
+	if name == "" {
+		name = "index.html"
+	}
+	fsys, err := fs.Sub(distFS, "dist")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if name != "index.html" {
+		if f, err := fsys.Open(name); err == nil {
+			info, statErr := f.Stat()
+			f.Close()
+			if statErr == nil && !info.IsDir() {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				http.ServeFileFS(w, r, fsys, name)
+				return
+			}
+		}
+		if filepath.Ext(name) != "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+	}
+
+	index, err := fs.ReadFile(fsys, "index.html")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(index)
+}
+
+func isLoopback(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

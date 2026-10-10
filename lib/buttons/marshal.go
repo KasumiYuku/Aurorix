@@ -5,6 +5,10 @@ import (
 	"fmt"
 )
 
+var commandNormalizer func(string) string
+
+func SetCommandNormalizer(fn func(string) string) { commandNormalizer = fn }
+
 func GenerateJson(keyboard Keyboard) ([]byte, error) {
 	if len(keyboard.Rows) == 0 {
 		return make([]byte, 0), nil
@@ -19,7 +23,7 @@ func GenerateJson(keyboard Keyboard) ([]byte, error) {
 	}
 	for i := 0; i < len(keyboard.Rows); i++ {
 		for j := 0; j < len(keyboard.Rows[i].List); j++ {
-			value := &keyboard.Rows[i].List[j] // 取指针
+			value := &keyboard.Rows[i].List[j]
 
 			if value.Type == Callback && value.CallbackData == "" {
 				return make([]byte, 0), fmt.Errorf("Button %v need CallbackData when ActionType is Callback", value.Id)
@@ -37,11 +41,16 @@ func GenerateJson(keyboard Keyboard) ([]byte, error) {
 			case Callback:
 				value.JsonData.Data = value.CallbackData
 			case Command:
-				value.JsonData.Data = value.Msg
+				msg := value.Msg
+				if commandNormalizer != nil {
+					msg = commandNormalizer(msg)
+				}
+				value.JsonData.Data = msg
 			case Link:
 				value.JsonData.Data = value.Url
 			}
 			value.JsonData.Reply = value.Reply
+			value.JsonData.Enter = value.AutoSend
 			value.JsonData.Anchor = value.Anchor
 			value.JsonData.UnsupportTips = value.UnsupportTips
 			value.JsonData.Permission = value.Permission

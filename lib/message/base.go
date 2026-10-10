@@ -1,11 +1,11 @@
 package message
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/contract"
-	"Plrx/lib/qqapi"
 	"encoding/json"
 	"fmt"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/contract"
 	"sync"
 )
 
@@ -15,13 +15,25 @@ type Message struct {
 	MsgSeq           uint8                  `json:"msg_seq,omitempty"`
 	EventId          string                 `json:"event_id,omitempty"`
 	Type             constant.MessageType   `json:"msg_type"`
-	Qapi             *qqapi.Client          `json:"-"`
+	Reference        *MessageReference      `json:"message_reference,omitempty"`
+	Qapi             *api.BotAPI            `json:"-"`
 	GroupId          string                 `json:"-"`
 	UserId           string                 `json:"-"`
-	Target           constant.MessageOrigin `json:"-"` // 发送目标(私聊/群)
-	used             bool                   `json:"-"` // 是否被使用过
+	Target           constant.MessageOrigin `json:"-"`
+	used             bool                   `json:"-"`
 	MarshalInterface contract.CanMarshal    `json:"-"`
-	initiativePush   bool                   `json:"-"` // 是否为主动推送
+	initiativePush   bool                   `json:"-"`
+}
+
+// MessageReference 引用回复：message_id 为被引用的原消息 ID。
+type MessageReference struct {
+	MessageID             string `json:"message_id"`
+	IgnoreGetMessageError bool   `json:"ignore_get_message_error"`
+}
+
+// QuoteTo 让本条消息引用原消息。
+func (msg *Message) QuoteTo(messageID string) {
+	msg.Reference = &MessageReference{MessageID: messageID}
 }
 
 // 初始化回复计数器
@@ -47,35 +59,42 @@ type Attachment struct {
 	URL         string `json:"url"`
 }
 
-// 发送消息
+// Send 发送消息。
 func (msg *Message) Send() error {
-	// 此消息是否已被使用
+	_, err := msg.SendWithID()
+	return err
+}
+
+// SendWithID 发送消息并返回平台消息 ID, 供撤回等后续操作使用。
+func (msg *Message) SendWithID() (string, error) {
 	if msg.used {
-		return &MessageUsed{
+		return "", &MessageUsed{
 			MessageId: msg.MsgId,
 		}
 	}
-	// 尝试增加计数
 	seq, err := msg.Count()
-	// 失败
 	if err != nil {
-		return err
+		return "", err
 	}
-	// 设置消息编号
 	msg.MsgSeq = seq
+	if msg.initiativePush {
+		msg.EventId = ""
+		msg.MsgId = ""
+		msg.MsgSeq = 0
+		msg.Reference = nil
+	}
 
-	// 解析消息
 	var data []byte
-	// 如果有传入解析接口
+	if pre, ok := msg.MarshalInterface.(contract.PreSend); ok {
+		pre.Prepare()
+	}
 	if msg.MarshalInterface != nil {
 		data, err = msg.MarshalInterface.Marshal()
 	} else {
-		// 否则使用内建
 		data, err = json.Marshal(msg)
 	}
-	// 解析出错
 	if err != nil {
-		return &JSONMarshalError{
+		return "", &JSONMarshalError{
 			Err: err,
 		}
 	}
@@ -84,15 +103,13 @@ func (msg *Message) Send() error {
 		panic("QQAPI Clinet空指针异常")
 	}
 
-	// 匹配消息类型
 	switch msg.Target {
 	case constant.GroupMessage:
-		return msg.Qapi.SendGroupMessage(data, msg.GroupId)
+		return msg.Qapi.SendGroupMessageID(data, msg.GroupId)
 	case constant.PrivateMessage:
-		return msg.Qapi.SendPrivateMessage(data, msg.UserId)
+		return msg.Qapi.SendPrivateMessageID(data, msg.UserId)
 	default:
-		// TODO: 更换为类型
-		return fmt.Errorf("Unknown message target type: %v", msg.Target)
+		return "", fmt.Errorf("Unknown message target type: %v", msg.Target)
 	}
 }
 

@@ -1,10 +1,9 @@
 package plugin
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/parser"
-	"reflect"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"io/fs"
 )
 
 type CommandHandleFunc func(*context.MessageContext) error
@@ -12,19 +11,20 @@ type PermissionDeniedHandleFunc func(*context.MessageContext) error
 type CommandErrorHandleFunc func(*context.MessageContext, error) error
 
 type Command struct {
-	Prefix             string                     // 指令前缀
-	Role               constant.RoleRequired      // 最低权限
-	DisablePrivate     bool                       // 是否禁止在私聊中使用
-	Describe           string                     // 指令描述
-	Handle             CommandHandleFunc          // 处理函数
-	PermissionDenied   PermissionDeniedHandleFunc // 权限不足时调用
-	HandleError        CommandErrorHandleFunc     // Handle 返回错误后调用
-	PluginId           string                     // 属于的插件ID
-	SubCommand         []*Command                 // 子指令
-	SubCommandFallback CommandHandleFunc          // 子指令未找到时回退的函数
-	// 解析器
-	Parser       parser.Parser // 解析器接口
-	ParserTarget reflect.Type  // 解析模板
+	Prefix             string
+	Aliases            []string
+	Role               constant.RoleRequired
+	DisablePrivate     bool
+	Describe           string
+	Handle             CommandHandleFunc
+	PermissionDenied   PermissionDeniedHandleFunc
+	HandleError        CommandErrorHandleFunc
+	PluginId           string
+	SubCommand         []*Command
+	SubCommandFallback CommandHandleFunc
+	Args               any
+
+	children map[string]*Command
 }
 
 type Plugin struct {
@@ -35,6 +35,8 @@ type Plugin struct {
 	Config         []ConfigField
 	ValidateConfig func(map[string]any) error
 	ApplyConfig    func(map[string]any) error
+	TemplateFS     fs.FS
+	WebUI          *WebUI
 }
 
 type ConfigField struct {

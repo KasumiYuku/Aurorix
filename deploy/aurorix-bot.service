@@ -1,0 +1,49 @@
+# Aurorix QQ Bot —— systemd 单元（lh-guangzhou 实机在用的那一份）
+#
+# 下面两个设置都是有原因的，改之前先读完：
+#
+#   Environment=AURORIX_SUPERVISED=1
+#     面板上的「重启」是让进程**自己退出**，再由 systemd 拉起（见 lib/bot/bot.go 的 spawnSelf）。
+#     不设这一位，进程会走「自己 fork 一个新进程」的老路，而 systemd 默认 KillMode=control-group ——
+#     主进程一退，systemd 停服务时会把同一个 cgroup 里刚 fork 出来的新进程一起杀掉；
+#     再加上那次退出的退出码是 0，Restart=on-failure 也不会动作。
+#     结果就是 2026-09-27 00:58 那次：点一下重启，机器人直接躺平不再起来。
+#
+#   Restart=always（而不是 on-failure）
+#     面板重启这条路径的退出码是 0（正常退出），而 on-failure 对退出码 0 不动作。
+#
+# 部署到别的机器时改这几处：WorkingDirectory / ExecStart 指到实际路径，User / Group 换成运行账号。
+#
+[Unit]
+Description=Aurorix QQ Bot (arcaea-plugin)
+After=network-online.target arcbackend.service
+Wants=network-online.target
+Wants=arcbackend.service
+
+# 防空转闸门（写在 [Unit] 而不是 [Service]：这两项是 unit 级启停策略，systemd 只认 Unit 块）。
+# 配合下面的 Restart=always，进程"起来就炸"时不会被无脑拉起：60 秒内炸满 5 次就躺平
+# （状态 failed），彻底停手。没有这道闸，1 秒一次的无限重启会把日志写爆、CPU 打满，
+# 连 ssh 都挤不进去。
+# 记一笔语义：这是一个**滑动窗口**计数，不是"连续 5 次"——60 秒里累计 5 次就触发；
+# 只要两次崩溃之间隔够久、窗口滑过去，计数会自己归零。
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+
+[Service]
+Type=simple
+WorkingDirectory=/home/Afkeru/aurorix-bot
+ExecStart=/home/Afkeru/aurorix-bot/bin/aurorix-bot
+Restart=always
+User=lighthouse
+Group=lighthouse
+Environment=AURORIX_SUPERVISED=1
+Environment=PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+RestartSec=5s
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target

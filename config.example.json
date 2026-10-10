@@ -1,0 +1,54 @@
+{
+  "port": 8080,
+  "appid": "你的机器人AppID",
+  "secret": "你的机器人AppSecret",
+  "proxy": "https://api.bot.qq.com",
+  "gateway_url": "",
+  "protocol": "webhook",
+  "intents": [
+    "GROUP_AT_MESSAGE_CREATE",
+    "GROUP_MESSAGE_CREATE",
+    "C2C_MESSAGE_CREATE",
+    "INTERACTION_CREATE",
+    "GROUP_MEMBER_ADD",
+    "GROUP_MEMBER_REMOVE",
+    "MESSAGE_AUDIT_PASS",
+    "MESSAGE_AUDIT_REJECT"
+  ],
+  "database": "bot.db",
+  "admin_password": "设置一个管理面板密码",
+  "global_markdown": false,
+  "markdown_verify_image": false,
+  "retry_when": [11253, 630006],
+  "upload_threshold": 3145728,
+  "log_level": "info",
+  "plugin_settings": {
+    "imagegen": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "你的API密钥",
+      "model_id": "gpt-image-1"
+    }
+  },
+  "plugin_access": {
+    "echo": {
+      "default": { "mode": "all" },
+      "commands": {
+        "/random": { "mode": "all" },
+        "/uid": { "mode": "deny" }
+      }
+    },
+    "uptime": {
+      "default": { "mode": "admin" },
+      "commands": {
+        "/uptime": { "mode": "admin" },
+        "/openai": { "mode": "admin" }
+      }
+    },
+    "bind": {
+      "default": { "mode": "all" }
+    },
+    "imagegen": {
+      "default": { "mode": "all" }
+    }
+  }
+}

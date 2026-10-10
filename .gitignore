@@ -1,4 +1,30 @@
 config.json
+assets.json
+# 第三方图床 provider 随框架入库; 凭证在 assets.json(已忽略), 目录里的 zip 只是本地备份
+lib/assets/providers/*.zip
+*_test.go
+# 例外: provider 的代码与测试一起入库
+!lib/assets/providers/*.go
 *.db
 *.db-shm
 *.db-wal
+# 依赖目录: webui 是 pnpm workspace, node_modules 散在 apps/* 和 packages/* 下,
+# 只忽略顶层那一个会漏掉一堆软链接。
+node_modules/
+aurorix
+aurorix
+lib/admin/dist/
+
+# 插件:官方示例入库, 个人/生态插件目录永不追踪
+plugins/*
+!plugins/bind/
+!plugins/echo/
+!plugins/imagegen/
+!plugins/uptime/
+
+# markdown:现有文档入库,新增默认忽略
+*.md
+!README.md
+!docs/*.md
+!lib/templates/builtin/markdown/*.md
+!plugins/*/templates/markdown/*.md
