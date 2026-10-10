@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # fmt + vet + test + build。lib/admin 内嵌的 dist 已随库入库, 空检出也能直接编译。
+      - name: make check
+        run: make check
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: webui/pnpm-lock.yaml
+
+      - name: 重建管理台产物
+        working-directory: webui
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # 产物必须和源码一致: 改了前端却忘了 make web 就提交, 这里会红。
+      - name: 内嵌产物与源码一致
+        run: git diff --exit-code -- lib/admin/dist
