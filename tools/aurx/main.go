@@ -41,7 +41,7 @@ func usage() {
   aurx add <module路径>                    接入插件 (官方/第三方/实例内部)
   aurx new-plugin <插件名>                 在实例生成插件骨架
   aurx run                                 构建并运行当前实例
-  aurx update [module...]                  更新插件依赖并重新编译检查
+  aurx update [all|模块...]                更新依赖并重新编译检查(模块名可简写)
 `)
 	os.Exit(0)
 }
