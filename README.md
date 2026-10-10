@@ -159,6 +159,8 @@ mybot/plugins/hello/
   "database": "data/bot.db",
   "admin_password": "设置一个管理面板密码",
   "global_markdown": false,
+  "footer_buttons_enabled": true,
+  "footer_buttons": ["+1 | counter | 感谢 {{count}} 次"],
   "retry_when": [11253, 630006],
   "upload_threshold": 3145728,
   "log_level": "info",
@@ -182,6 +184,8 @@ mybot/plugins/hello/
 | `database` | SQLite 数据库路径（实例默认 `data/bot.db`） |
 | `admin_password` | 管理台密码；留空仅本机可访问 |
 | `global_markdown` | 所有文字按 Markdown 渲染，图片/按钮内联 |
+| `footer_buttons_enabled` | 底部按钮总开关。省略即启用；设 `false` 只静音、保留配置 |
+| `footer_buttons` | 每个 Markdown 消息末尾追加的一行按钮；一行一个：`标签 | 类型 | 参数 | 选项`，类型 `counter` / `command` / `link`。详见 [docs/configuration.md](docs/configuration.md) |
 | `retry_when` | 命中这些 QQ 业务错误码自动重试 |
 | `upload_threshold` | 超过该字节数走分片上传（默认 3MB） |
 | `log_level` | 控制台日志级别，可在线热更 |

@@ -68,6 +68,8 @@ ctx.Msg().
 
 键盘最多 5 行、每行最多 5 个按钮。三种动作类型：命令 / 链接 / 回调。
 
+> 想让**每条** Markdown 消息都自动带一行按钮（比如「+1」点赞），不必逐条构造键盘：配好 `footer_buttons`，框架会在发送前把它追加到消息末尾。见 [configuration.md](configuration.md#底部按钮footer_buttons)。
+
 ### 构造
 
 ```go
