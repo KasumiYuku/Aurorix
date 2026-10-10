@@ -266,10 +266,10 @@ $path = [Environment]::GetEnvironmentVariable("Path", "User")
 </details>
 
 <details>
-<summary>修改了前端（web/）？</summary>
+<summary>修改了前端（webui/）？</summary>
 
 ```bash
-cd web && pnpm build   # 产物嵌入 lib/admin/dist，重新编译实例即生效
+cd webui && pnpm build   # 等价于 make web；产物嵌入 lib/admin/dist，重新编译实例即生效
 ```
 
 </details>

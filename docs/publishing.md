@@ -84,5 +84,5 @@ aurx run                           # 重新编译
 | 插件代码 | 重新编译实例：`aurx run` |
 | 新增插件目录 | `aurx add` 或手动加空导入 |
 | 框架代码（lib/） | replace 指向本地，改动即时可见，重编实例 |
-| 管理台前端（框架 web/） | `cd web && pnpm build`，再重编实例 |
+| 管理台前端（框架 webui/） | `make web`（即 `cd webui && pnpm build`），再重编实例 |
 | 更新框架 | `git pull`，重编实例；官方插件有变按报错调整 |
