@@ -1,4 +1,4 @@
-// Command aurx 实例脚手架: new 建工程, add 接入插件, new-plugin 建插件, run 构建运行。
+// Command aurx 实例脚手架: new 建工程, add 接入插件, new-plugin 建插件, run 构建运行, update 更新依赖。
 package main
 
 import (
@@ -20,6 +20,8 @@ func main() {
 		err = cmdNewPlugin(os.Args[2:])
 	case "run":
 		err = cmdRun(os.Args[2:])
+	case "update":
+		err = cmdUpdate(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -39,6 +41,7 @@ func usage() {
   aurx add <module路径>                    接入插件 (官方/第三方/实例内部)
   aurx new-plugin <插件名>                 在实例生成插件骨架
   aurx run                                 构建并运行当前实例
+  aurx update [module...]                  更新插件依赖并重新编译检查
 `)
 	os.Exit(0)
 }
