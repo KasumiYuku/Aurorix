@@ -36,7 +36,6 @@ var coreSpecs = []coreField{
 	{Key: "admin_password", Label: "管理密码", Desc: "留空保持原值; 修改后现有会话立即失效", Kind: "secret", Hot: true},
 	{Key: "log_level", Label: "控制台日志级别", Kind: "select", Options: []string{"debug", "info", "warn", "error"}, Hot: true},
 	{Key: "global_markdown", Label: "全局 Markdown 回复", Kind: "bool", Hot: true},
-	{Key: "markdown_verify_image", Label: "Markdown 图片校验", Desc: "检测 markdown 模板内的图片 URL 是否需走图床", Kind: "bool", Hot: true},
 	{Key: "retry_when", Label: "消息重试错误码", Desc: "每行一个业务错误码", Kind: "intlist", Hot: true},
 	{Key: "upload_threshold", Label: "分片上传阈值(字节)", Kind: "number", Hot: true},
 }
@@ -78,8 +77,6 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 		field.Value = cfg.LogLevel
 	case "global_markdown":
 		field.Value = cfg.GlobalMarkdown
-	case "markdown_verify_image":
-		field.Value = cfg.MarkdownVerifyImage
 	case "retry_when":
 		field.Value = cfg.RetryWhen
 	case "upload_threshold":
@@ -180,8 +177,8 @@ func handlePutConfig(deps Deps) http.HandlerFunc {
 			return
 		}
 		next := config.Current()
-		if deps.Client != nil && hasAny(hotChanged, "global_markdown", "markdown_verify_image", "retry_when", "upload_threshold") {
-			deps.Client.SetMessageOptions(next.GlobalMarkdown, next.MarkdownVerifyImage, next.RetryWhen, next.UploadThreshold)
+		if deps.Client != nil && hasAny(hotChanged, "global_markdown", "retry_when", "upload_threshold") {
+			deps.Client.SetMessageOptions(next.GlobalMarkdown, next.RetryWhen, next.UploadThreshold)
 		}
 		if hasAny(hotChanged, "log_level") {
 			logx.SetConsoleLevel(next.LogLevel)

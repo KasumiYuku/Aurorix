@@ -71,7 +71,7 @@ aurx run
 
 实例结构：
 
-```
+```text
 mybot/
 ├── main.go              插件接入清单（空导入）
 ├── config.json          凭证与运行配置
@@ -124,7 +124,7 @@ aurx run                           # 重新编译并运行
 
 生成后目录长这样：
 
-```
+```text
 mybot/plugins/hello/
 ├── hello.go              插件主体：注册 + 指令逻辑
 └── templates/
@@ -142,7 +142,7 @@ mybot/plugins/hello/
 
 ## 配置
 
-`config.json` 是唯一配置文件（位于实例目录）。完整字段与可订阅事件：
+`config.json` 是唯一配置文件（位于实例目录）。全字段参考见 [docs/configuration.md](docs/configuration.md)，下面是最常用的速查表与可订阅事件：
 
 <details>
 <summary>config.json 全字段（点击展开）</summary>
@@ -159,11 +159,13 @@ mybot/plugins/hello/
   "database": "data/bot.db",
   "admin_password": "设置一个管理面板密码",
   "global_markdown": false,
-  "markdown_verify_image": false,
   "retry_when": [11253, 630006],
   "upload_threshold": 3145728,
   "log_level": "info",
   "prefixes": ["/", "#", ""],
+  "memory_limit_mb": 0,
+  "gc_percent": 0,
+  "pprof_addr": "",
   "plugin_settings": {},
   "plugin_access": {}
 }
@@ -180,11 +182,13 @@ mybot/plugins/hello/
 | `database` | SQLite 数据库路径（实例默认 `data/bot.db`） |
 | `admin_password` | 管理台密码；留空仅本机可访问 |
 | `global_markdown` | 所有文字按 Markdown 渲染，图片/按钮内联 |
-| `markdown_verify_image` | Markdown 图片转存失败时中断发送 |
 | `retry_when` | 命中这些 QQ 业务错误码自动重试 |
 | `upload_threshold` | 超过该字节数走分片上传（默认 3MB） |
 | `log_level` | 控制台日志级别，可在线热更 |
 | `prefixes` | 指令前缀符号，`""` 表示允许无前缀裸指令；默认 `["/", "#", ""]` |
+| `memory_limit_mb` | 内存软上限（MiB）。不填按整机内存自动推导，`0` 表示不设。只改 config.json，重启生效 |
+| `gc_percent` | GC 触发比例（`GOGC`）。`0` 为 Go 默认。只改 config.json，重启生效 |
+| `pprof_addr` | pprof 调试地址，留空关闭；以 `:` 开头自动补 `127.0.0.1`。只改 config.json，重启生效 |
 | `plugin_settings` | 插件配置，面板修改即时生效 |
 | `plugin_access` | 插件访问控制 |
 
@@ -217,6 +221,8 @@ mybot/plugins/hello/
 
 内置的 `qqbot` 是官方富媒体图床：不需要任何第三方账号，默认启用，排在所有第三方图床之后兜底 —— 第三方全挂、甚至一个都没配时，它把图传进平台自己的存储，取回一条 24 小时有效的预签名直链写进 markdown，图照样能内嵌显示。它按会话上传（群里的文件不能跨到单聊用），所以只对"正在发送的图"生效；又因为拿到的是预签名直链，宿主默认不对它做上传后探测。要把这条通道关掉，在管理台把 `qqbot` 关掉并保存即可。
 
+完整 provider 清单、优先级与回退规则、探测语义，以及自定义 provider 扩展点见 [docs/assets.md](docs/assets.md)。
+
 ## 开发文档
 
 | 文档 | 内容 |
@@ -227,6 +233,9 @@ mybot/plugins/hello/
 | [docs/schedule.md](docs/schedule.md) | 定时任务 |
 | [docs/storage.md](docs/storage.md) | 配置热更与数据存储 |
 | [docs/events.md](docs/events.md) | 群事件、按钮回调、HTTP 客户端 |
+| [docs/assets.md](docs/assets.md) | 图床：上传链与回退、内置 Provider 清单、自定义 Provider |
+| [docs/configuration.md](docs/configuration.md) | 配置参考：全字段默认值与生效方式、intents 全集、内存与 pprof |
+| [docs/webui.md](docs/webui.md) | 插件自带管理台：声明、挂载与鉴权 |
 | [docs/push.md](docs/push.md) | 主动推送：HTTP 端点完整协议与使用 |
 | [docs/api.md](docs/api.md) | API 全景：流式消息、BotAPI 门面、HTTP 客户端、日志、常量 |
 | [docs/publishing.md](docs/publishing.md) | 插件开发流程、发布与生态接入 |

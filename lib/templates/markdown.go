@@ -2,7 +2,6 @@ package templates
 
 import (
 	"fmt"
-	"github.com/KasumiYuku/Aurorix/lib/images"
 	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"io/fs"
 	"regexp"
@@ -21,10 +20,29 @@ func (m Markdown) IsZero() bool {
 	return m.Content == ""
 }
 
+// MarkdownTemplate 已注册的模板。markdown 与 html 共用同一份注册表与填充逻辑,
+// 区别只有文件后缀和渲染口径, 所以两种格式用同一个结构体承载。
 type MarkdownTemplate struct {
 	Id       string
 	Template string
 	args     []string
+	kind     kind
+}
+
+// kind 模板格式。注册表按 (格式, id) 定位, 同名 markdown 与 html 模板互不覆盖。
+type kind string
+
+const (
+	kindMarkdown kind = "markdown"
+	kindHTML     kind = "html"
+)
+
+// suffix 该格式的模板文件后缀。
+func (k kind) suffix() string {
+	if k == kindHTML {
+		return ".html"
+	}
+	return ".md"
 }
 
 // Args 模板参数，支持任意嵌套的 map/slice。
@@ -34,65 +52,82 @@ var log = logx.New("templates")
 
 var (
 	regMu   sync.Mutex
-	regMap  = make(map[string]map[string]*MarkdownTemplate)
+	regMap  = make(map[string]map[templateKey]*MarkdownTemplate)
 	regSnap atomic.Value
 )
 
+// templateKey 注册表键: 同一命名空间下 markdown 与 html 可以有同名模板。
+type templateKey struct {
+	kind kind
+	id   string
+}
+
 func publish() {
-	next := make(map[string]map[string]*MarkdownTemplate, len(regMap))
+	next := make(map[string]map[templateKey]*MarkdownTemplate, len(regMap))
 	for ns, m := range regMap {
-		cp := make(map[string]*MarkdownTemplate, len(m))
-		for id, t := range m {
-			cp[id] = t
+		cp := make(map[templateKey]*MarkdownTemplate, len(m))
+		for key, t := range m {
+			cp[key] = t
 		}
 		next[ns] = cp
 	}
 	regSnap.Store(next)
 }
 
-func register(ns, id, content string) {
+func register(k kind, ns, id, content string) {
 	template, args := processTemplate(content)
+	key := templateKey{kind: k, id: id}
 	regMu.Lock()
 	m := regMap[ns]
 	if m == nil {
-		m = make(map[string]*MarkdownTemplate)
+		m = make(map[templateKey]*MarkdownTemplate)
 		regMap[ns] = m
 	}
-	if _, dup := m[id]; dup {
-		log.Warnf("模板 %v/%v 重复注册, 已覆盖", ns, id)
+	if _, dup := m[key]; dup {
+		log.Warnf("%v 模板 %v/%v 重复注册, 已覆盖", k, ns, id)
 	}
-	m[id] = &MarkdownTemplate{Id: id, Template: template, args: args}
+	m[key] = &MarkdownTemplate{Id: id, Template: template, args: args, kind: k}
 	publish()
 	regMu.Unlock()
 }
 
 // RegisterFS 把 FS 内 dir 子树下的 *.md 注册到命名空间。
 func RegisterFS(ns string, fsys fs.FS, dir string) error {
+	return registerFS(kindMarkdown, ns, fsys, dir)
+}
+
+// registerFS 把 FS 内 dir 子树下该格式的模板文件注册到命名空间, 文件名即模板 ID。
+func registerFS(k kind, ns string, fsys fs.FS, dir string) error {
 	return fs.WalkDir(fsys, dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+		if d.IsDir() || !strings.HasSuffix(d.Name(), k.suffix()) {
 			return nil
 		}
 		content, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return err
 		}
-		register(ns, strings.TrimSuffix(d.Name(), ".md"), string(content))
+		register(k, ns, strings.TrimSuffix(d.Name(), k.suffix()), string(content))
 		return nil
 	})
 }
 
-// NewMarkdownTemplate 注册单个模板到全局命名空间。
+// NewMarkdownTemplate 注册单个 markdown 模板到全局命名空间。
 func NewMarkdownTemplate(Id string, Template string) {
-	register("", Id, Template)
+	register(kindMarkdown, "", Id, Template)
 }
 
-// IsMarkdownTemplateExit 任意命名空间是否存在该模板。
+// IsMarkdownTemplateExit 任意命名空间是否存在该 markdown 模板。
 func IsMarkdownTemplateExit(Id string) bool {
-	for _, m := range regSnap.Load().(map[string]map[string]*MarkdownTemplate) {
-		if m[Id] != nil {
+	return exists(kindMarkdown, Id)
+}
+
+// exists 任意命名空间是否存在该格式的模板。
+func exists(k kind, id string) bool {
+	for _, m := range regSnap.Load().(map[string]map[templateKey]*MarkdownTemplate) {
+		if m[templateKey{kind: k, id: id}] != nil {
 			return true
 		}
 	}
@@ -178,21 +213,6 @@ func processTemplate(input string) (string, []string) {
 	return result, args
 }
 
-var imageRe = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
-
-// ProcessMarkdownImages 处理 markdown 图片引用并附带尺寸。
-func ProcessMarkdownImages(input string) string {
-	return imageRe.ReplaceAllStringFunc(input, func(match string) string {
-		submatch := imageRe.FindStringSubmatch(match)
-		alt, url := submatch[1], submatch[2]
-		width, height, err := images.GetImageDimensions(url)
-		if err != nil {
-			return match
-		}
-		return fmt.Sprintf("![%s #%dpx #%dpx](%s)\n", alt, width, height, url)
-	})
-}
-
 func processEach(template string, arg Args, flat map[string]string) (string, error) {
 	if !strings.Contains(template, "{{#each") {
 		return template, nil
@@ -257,31 +277,36 @@ func processEach(template string, arg Args, flat map[string]string) (string, err
 	return out.String(), nil
 }
 
-// FillMarkdownTemplate 全局命名空间填充模板并校验是否仍有未填充项。
+// FillMarkdownTemplate 全局命名空间填充 markdown 模板并校验是否仍有未填充项。
 func FillMarkdownTemplate(Id string, arg Args) (string, error) {
-	return fillFor("", Id, arg)
+	return fillFor(kindMarkdown, "", Id, arg)
 }
 
-// FillFor 插件命名空间优先填充, 未命中回落全局。
+// FillFor 插件命名空间优先填充 markdown 模板, 未命中回落全局。
 func FillFor(ns, Id string, arg Args) (string, error) {
-	return fillFor(ns, Id, arg)
+	return fillFor(kindMarkdown, ns, Id, arg)
 }
 
-func fillFor(ns, Id string, arg Args) (string, error) {
-	snap := regSnap.Load().(map[string]map[string]*MarkdownTemplate)
+func fillFor(k kind, ns, Id string, arg Args) (string, error) {
+	snap := regSnap.Load().(map[string]map[templateKey]*MarkdownTemplate)
+	key := templateKey{kind: k, id: Id}
 	if ns != "" {
 		if m := snap[ns]; m != nil {
-			if t := m[Id]; t != nil {
+			if t := m[key]; t != nil {
 				return fill(t, arg)
 			}
 		}
 	}
 	if m := snap[""]; m != nil {
-		if t := m[Id]; t != nil {
+		if t := m[key]; t != nil {
 			return fill(t, arg)
 		}
 	}
-	return "", fmt.Errorf("Template %v not found", Id)
+	scope := "全局命名空间"
+	if ns != "" {
+		scope = fmt.Sprintf("命名空间 %q 与全局命名空间", ns)
+	}
+	return "", fmt.Errorf("%v 模板 %v 不存在(已查 %s)", k, Id, scope)
 }
 
 func fill(t *MarkdownTemplate, arg Args) (string, error) {
@@ -308,11 +333,20 @@ func fill(t *MarkdownTemplate, arg Args) (string, error) {
 	return template, nil
 }
 
-// GetMarkdownTemplateCount 全部命名空间的模板总数。
+// GetMarkdownTemplateCount 全部命名空间的 markdown 模板总数。
 func GetMarkdownTemplateCount() uint {
+	return count(kindMarkdown)
+}
+
+// count 全部命名空间里该格式的模板总数。
+func count(k kind) uint {
 	var n uint
-	for _, m := range regSnap.Load().(map[string]map[string]*MarkdownTemplate) {
-		n += uint(len(m))
+	for _, m := range regSnap.Load().(map[string]map[templateKey]*MarkdownTemplate) {
+		for key := range m {
+			if key.kind == k {
+				n++
+			}
+		}
 	}
 	return n
 }

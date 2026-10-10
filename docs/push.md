@@ -1,30 +1,34 @@
 # 主动推送（HTTP）
 
-> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [定时任务](schedule.md) · [存储](storage.md) · [事件](events.md) · [推送](push.md) · [API 参考](api.md) · [发布](publishing.md)
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [图床](assets.md) · [配置](configuration.md) · [插件管理台](webui.md) · [API 参考](api.md) · [发布](publishing.md)
 
 框架内置主动推送服务（`lib/push`）：**任何外部系统**通过 HTTP 把消息推给机器人，机器人转发到指定群或私聊。适合定时提醒、监控告警、外部系统通知等场景——无需登录 QQ，一个 `curl` 即可。
 
 ## 三步开通
 
-```bash
-# 1. 机器人端: 允许推送到目标会话 (群主/机器人所有者在目标群里发)
-#    /enablepush    开启推送
-#    /pushkey 123456 # 设置该会话的推送密钥
-#    /pushstatus    查看状态
-#    /disablepush   关闭推送
+**1. 机器人端开启**——群主或机器人在目标会话里执行（指令全表见下方[管理指令](#管理指令)）：
 
-# 2. 外部系统: 携带密钥 POST 推送 (X-Push-Key 头或 body 的 key 字段)
+```text
+/enablepush        # 允许向当前会话推送
+/pushkey 123456    # 设置该会话的推送密钥
+/pushstatus        # 查看状态
+/disablepush       # 关闭推送
+```
+
+**2. 外部系统推送**——携带密钥 POST 一次即可（密钥可放 `X-Push-Key` 头或请求体的 `key` 字段，头部优先）：
+
+```bash
 curl -X POST 'http://你的地址:8080/push/group/群OpenID' \
   -H 'Content-Type: application/json' \
   -H 'X-Push-Key: 123456' \
   -d '{"type":"markdown","content":"# 告警\n服务器负载过高"}'
-
-# 3. 机器人收到后转发到目标群
 ```
+
+**3. 框架转发**——消息落到目标会话。未开启推送返回 403，密钥错误返回 401，触发限流返回 429（见[响应](#响应)）。
 
 ## 端点
 
-```
+```text
 POST /push/:scope/:openid
 ```
 

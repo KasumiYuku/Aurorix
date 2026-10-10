@@ -35,8 +35,15 @@ type Plugin struct {
 	Config         []ConfigField
 	ValidateConfig func(map[string]any) error
 	ApplyConfig    func(map[string]any) error
-	TemplateFS     fs.FS
-	WebUI          *WebUI
+	// TemplateFS 插件自带 markdown 模板, 目录约定 templates/markdown/*.md。
+	TemplateFS fs.FS
+
+	// HTMLTemplateFS 插件自带 HTML 模板, 目录约定 templates/html/*.html。与 markdown 同构:
+	// 按文件名注册进插件命名空间, 用 templates.FillHTMLFor(插件Id, ...) 填充。两个目录可以
+	// 放在同一个 embed.FS 里, 两处都传它即可。
+	HTMLTemplateFS fs.FS
+
+	WebUI *WebUI
 }
 
 type ConfigField struct {

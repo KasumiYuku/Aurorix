@@ -1,6 +1,6 @@
 # API 全景参考
 
-> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [定时任务](schedule.md) · [存储](storage.md) · [事件](events.md) · [推送](push.md) · [API 参考](api.md) · [发布](publishing.md)
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [图床](assets.md) · [配置](configuration.md) · [插件管理台](webui.md) · [API 参考](api.md) · [发布](publishing.md)
 
 本篇穷尽插件可用的框架 API：门面入口、流式消息、HTTP 客户端、日志、常量。按主题文档（commands/message/schedule/storage/events/push）是使用向导，本篇是符号索引。
 
@@ -110,4 +110,11 @@ log.Errorf("错误: %v", v)
 
 ## 未覆盖的底层包
 
-`lib/gateway`（网关）、`lib/admin`（管理台）、`lib/middleware`（中间件）、`lib/structers`（入站协议结构）属于框架内部实现，插件不直接依赖。入站消息结构（`UserMessage` / `Mention` / `Quote` / `Attachment`）经 `MessageContext` 字段暴露，见 [message.md](message.md)。
+以下包属于框架内部实现，插件不直接 `import`，本篇不做符号级索引；它们的效果都通过配置或其它文档体现：
+
+| 包 | 作用 | 在哪看 |
+|---|---|---|
+| `lib/admin` | 管理台与它的 HTTP 接口 | 仓库根 README 的「管理台」一节 |
+| `lib/gateway` | WebSocket 网关：订阅、重连与退避 | [configuration.md](configuration.md) 的 `protocol` / `intents` |
+| `lib/middleware` | 入站校验、事件分发与错误兜底 | 行为经 [events.md](events.md) 体现 |
+| `lib/structers` | 入站协议结构 | 经 `MessageContext` 字段暴露，见 [message.md](message.md) |

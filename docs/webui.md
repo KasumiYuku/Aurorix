@@ -1,5 +1,7 @@
 # 插件自带管理台
 
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [图床](assets.md) · [配置](configuration.md) · [插件管理台](webui.md) · [API 参考](api.md) · [发布](publishing.md)
+
 管理台是**可选能力**。插件不声明 `WebUI`，就只是一个纯指令插件：框架不会为它注册任何路由，框架管理台里也不会出现任何入口——小型插件零负担。
 
 只有需要独立操作界面的插件（曲库管理、用户档案、批量运维……）才声明它。

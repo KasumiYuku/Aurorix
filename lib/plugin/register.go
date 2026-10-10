@@ -126,6 +126,11 @@ func Register(plugin *Plugin) {
 			regLog.Warnf("插件 %s 模板装载失败: %v", plugin.Id, err)
 		}
 	}
+	if plugin.HTMLTemplateFS != nil {
+		if err := templates.RegisterHTMLFS(plugin.Id, plugin.HTMLTemplateFS, "templates/html"); err != nil {
+			regLog.Warnf("插件 %s HTML 模板装载失败: %v", plugin.Id, err)
+		}
+	}
 	for _, v := range plugin.Commands {
 		buildIndex(v, plugin.Id)
 		if existing, ok := GlobalCommands[v.Prefix]; ok {

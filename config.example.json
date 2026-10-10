@@ -18,7 +18,6 @@
   "database": "bot.db",
   "admin_password": "设置一个管理面板密码",
   "global_markdown": false,
-  "markdown_verify_image": false,
   "retry_when": [11253, 630006],
   "upload_threshold": 3145728,
   "log_level": "info",

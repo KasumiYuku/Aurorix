@@ -28,7 +28,7 @@ flowchart LR
 
 **生命周期**
 
-```
+```text
 包 init() → plugin.Register(...) → 框架注册指令/配置/权限
         → 启动时加载插件配置与访问控制
         → 消息命中 → 权限校验 → 参数解析 → Handle(ctx)
@@ -97,7 +97,7 @@ func cmd(ctx *context.MessageContext) error {
 
 目录结构（`templates/markdown/Hello.md` 是模板文件，随插件 embed 进二进制）：
 
-```
+```text
 mybot/plugins/hello/
 ├── hello.go              插件主体
 └── templates/markdown/Hello.md
@@ -136,6 +136,35 @@ func cmd(ctx *context.MessageContext) error {
 
 模板的解析规则：插件命名空间优先，未命中回落全局命名空间（框架内置模板如 `Card`）。`templates/markdown` 内可放任意多个 `.md`，文件名即模板 ID。`{{inline "显示文字" "命令"}}` 可生成 QQ 蓝色点击指令链接。更多规则见 [message.md](message.md#markdown-模板)。
 
+### 给插件加一个 HTML 模板
+
+HTML 模板和 markdown 模板是同一套机制：同样按文件名注册、同样插件命名空间优先，同样支持 `{{name}}` 与 `{{#each}}`，区别只有文件后缀（`.html`）和渲染口径。加一个 `HTMLTemplateFS` 字段即可，目录约定 `templates/html`：
+
+```go
+//go:embed templates
+var templateFS embed.FS   // 同一个 FS 可以同时喂给 markdown 和 HTML
+
+plugin.Register(&plugin.Plugin{
+	Id:             "hello",
+	TemplateFS:     templateFS,   // 收 templates/markdown/*.md
+	HTMLTemplateFS: templateFS,   // 收 templates/html/*.html
+	// ...
+})
+```
+
+填充：
+
+```go
+page, err := templates.FillHTMLFor("hello", "Verify", templates.Args{
+	"nick": templates.EscapeHTML(nick),   // 值来自用户输入时先转义
+})
+```
+
+两处和 markdown 不同，要留意：
+
+- **不自动转义**：引擎按原样插入值。值来自用户输入（群名、昵称、邮箱之类）而结果要进浏览器时，用 `templates.EscapeHTML` 包一层，否则对方能把标签写进页面。
+- **`{{inline}}` 是 markdown 专用标签**，HTML 模板里别用，它只会渲染出一个 markdown 链接。
+
 编辑 `plugins/hello/hello.go` 写你的逻辑，然后：
 
 ```bash
@@ -146,14 +175,28 @@ aurx run    # 重新编译并启动
 
 ## 文档导航
 
+**按主题**
+
 | 文档 | 主题 |
 |---|---|
 | [commands.md](commands.md) | 指令开发：Command 全字段、前缀与匹配、参数解析、子指令、权限角色 |
-| [message.md](message.md) | 消息开发：全部构造器、组合消息、Markdown 模板、按钮键盘、图片与媒体 |
+| [message.md](message.md) | 消息开发：全部构造器、组合消息、Markdown / HTML 模板、按钮键盘、图片与媒体 |
+| [events.md](events.md) | 事件：订阅与回调、事件对象、按钮回执、未知事件与自定义事件 |
 | [schedule.md](schedule.md) | 定时任务：Cron / 间隔、预设目标、任务管理 |
 | [storage.md](storage.md) | 配置热更与数据存储：ConfigField、Validate/Apply、存储命名空间 |
-| [events.md](events.md) | 事件与能力：群事件回调、按钮交互回执、HTTP 客户端、图床 Provider |
-| [webui.md](webui.md) | 插件自带管理台（可选）：WebUI 声明、挂载与鉴权、框架入口、前端约定 |
+| [assets.md](assets.md) | 图床与资源：上传链与回退、内置 Provider 清单、自定义 Provider、排障 |
 | [push.md](push.md) | 主动推送：HTTP 端点完整协议、鉴权、状态码、管理指令 |
+| [webui.md](webui.md) | 插件自带管理台（可选）：WebUI 声明、挂载与鉴权、框架入口、前端约定 |
+| [configuration.md](configuration.md) | 配置参考：`config.json` 全字段默认值与生效方式、intents 全集、内存与 pprof |
 | [api.md](api.md) | API 全景参考：BotAPI 门面、流式消息、HTTP 客户端、日志、常量 |
 | [publishing.md](publishing.md) | 完整开发流程、发布插件、生态接入（本地文件夹 / 网络模块） |
+
+**按使用路径**
+
+| 你要做的事 | 建议顺序 |
+|---|---|
+| 第一次上手 | [commands.md](commands.md) → [message.md](message.md) → [storage.md](storage.md) |
+| 写事件驱动的逻辑 | [events.md](events.md) → [schedule.md](schedule.md) → [assets.md](assets.md) |
+| 接外部系统进来 | [push.md](push.md) → [configuration.md](configuration.md) |
+| 发布自己的插件 | [publishing.md](publishing.md) → [webui.md](webui.md) |
+| 部署排障 | [configuration.md](configuration.md) → [assets.md](assets.md) → [api.md](api.md) |

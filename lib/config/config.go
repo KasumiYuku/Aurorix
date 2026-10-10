@@ -14,34 +14,26 @@ import (
 
 var configLock sync.Mutex
 
-type Plugin struct {
-	Id     string   `json:"id"`
-	Prefix string   `json:"prefix"`
-	Group  []string `json:"group"`
-}
-
 type AppConfig struct {
-	Port                uint16                    `json:"port"`
-	AppId               string                    `json:"appid"`
-	AppSecret           string                    `json:"secret"`
-	Plugins             []Plugin                  `json:"plugins"`
-	ProxyAPI            string                    `json:"proxy"`
-	Database            string                    `json:"database"`
-	AdminPassword       string                    `json:"admin_password"`
-	Protocol            string                    `json:"protocol,omitempty"`
-	Intents             []string                  `json:"intents,omitempty"`
-	GatewayURL          string                    `json:"gateway_url,omitempty"`
-	GlobalMarkdown      bool                      `json:"global_markdown,omitempty"`
-	MarkdownVerifyImage bool                      `json:"markdown_verify_image,omitempty"`
-	RetryWhen           []int                     `json:"retry_when,omitempty"`
-	UploadThreshold     int                       `json:"upload_threshold,omitempty"`
-	LogLevel            string                    `json:"log_level,omitempty"`
-	Prefixes            []string                  `json:"prefixes,omitempty"`
-	MemoryLimitMB       int                       `json:"memory_limit_mb,omitempty"`
-	GCPercent           int                       `json:"gc_percent,omitempty"`
-	PProfAddr           string                    `json:"pprof_addr,omitempty"`
-	PluginSettings      map[string]map[string]any `json:"plugin_settings"`
-	PluginAccess        map[string]AccessConfig   `json:"plugin_access"`
+	Port            uint16                    `json:"port"`
+	AppId           string                    `json:"appid"`
+	AppSecret       string                    `json:"secret"`
+	ProxyAPI        string                    `json:"proxy"`
+	Database        string                    `json:"database"`
+	AdminPassword   string                    `json:"admin_password"`
+	Protocol        string                    `json:"protocol,omitempty"`
+	Intents         []string                  `json:"intents,omitempty"`
+	GatewayURL      string                    `json:"gateway_url,omitempty"`
+	GlobalMarkdown  bool                      `json:"global_markdown,omitempty"`
+	RetryWhen       []int                     `json:"retry_when,omitempty"`
+	UploadThreshold int                       `json:"upload_threshold,omitempty"`
+	LogLevel        string                    `json:"log_level,omitempty"`
+	Prefixes        []string                  `json:"prefixes,omitempty"`
+	MemoryLimitMB   int                       `json:"memory_limit_mb,omitempty"`
+	GCPercent       int                       `json:"gc_percent,omitempty"`
+	PProfAddr       string                    `json:"pprof_addr,omitempty"`
+	PluginSettings  map[string]map[string]any `json:"plugin_settings"`
+	PluginAccess    map[string]AccessConfig   `json:"plugin_access"`
 }
 
 type AccessRule struct {
@@ -282,12 +274,6 @@ func applyCoreKey(cfg *AppConfig, key string, rawValue json.RawMessage) error {
 			return fmt.Errorf("global_markdown: %w", err)
 		}
 		cfg.GlobalMarkdown = v
-	case "markdown_verify_image":
-		var v bool
-		if err := json.Unmarshal(rawValue, &v); err != nil {
-			return fmt.Errorf("markdown_verify_image: %w", err)
-		}
-		cfg.MarkdownVerifyImage = v
 	case "retry_when":
 		var v []int
 		if err := json.Unmarshal(rawValue, &v); err != nil {

@@ -1,6 +1,6 @@
 # 指令开发
 
-> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [定时任务](schedule.md) · [存储](storage.md) · [事件](events.md) · [推送](push.md) · [API 参考](api.md) · [发布](publishing.md)
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [图床](assets.md) · [配置](configuration.md) · [插件管理台](webui.md) · [API 参考](api.md) · [发布](publishing.md)
 
 ## Command
 
@@ -74,7 +74,7 @@ func bind(ctx *context.MessageContext) error {
 }
 ```
 
-```
+```text
 /bind U123456     → args.UID = "U123456"
 /bind            → 自动回复用法: 缺 uid
 ```
@@ -90,7 +90,7 @@ type args struct {
 }
 ```
 
-```
+```text
 /bind U123456 --note 朋友  → args.Note = "朋友"
 /bind U123456              → args.Note = "无备注" (默认值)
 ```
@@ -106,7 +106,7 @@ type args struct {
 }
 ```
 
-```
+```text
 /bind U123456 --silent  → args.Silent = true
 /bind U123456           → args.Silent = false
 ```
@@ -123,7 +123,7 @@ type args struct {
 }
 ```
 
-```
+```text
 /bind U123456 --mode full --tags a,b,c  → Mode="full", Tags=["a","b","c"]
 /bind U123456 --mode slow               → 自动回复用法 (slow 不在枚举内)
 ```

@@ -101,7 +101,7 @@ func Run() {
 	if host := assetsManager.Host(); host.Size() > 0 {
 		logger.Infof("已启用图床聚合，provider 数量: %d", host.Size())
 	}
-	client.SetMessageOptions(appConfig.GlobalMarkdown, appConfig.MarkdownVerifyImage, appConfig.RetryWhen, appConfig.UploadThreshold)
+	client.SetMessageOptions(appConfig.GlobalMarkdown, appConfig.RetryWhen, appConfig.UploadThreshold)
 
 	push.Init(client)
 	schedule.Start(client)
@@ -194,7 +194,7 @@ func Run() {
 	}
 
 	logger.Infof("管理台: http://127.0.0.1:%d/admin", appConfig.Port)
-	logger.Infof("注册了%v个Markdown模板", templates.GetMarkdownTemplateCount())
+	logger.Infof("注册了%v个Markdown模板, %v个HTML模板", templates.GetMarkdownTemplateCount(), templates.GetHTMLTemplateCount())
 	logger.Infof("注册了%v个指令", plugin.GetCommandCount())
 	logger.Infof("注册了%v个定时任务", schedule.GetJobCount())
 	if gw != nil {

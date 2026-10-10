@@ -19,15 +19,14 @@ import (
 
 // BotAPI 平台客户端门面: 持有凭证、HTTP 基建与各域 API 实例。
 type BotAPI struct {
-	AppID               string
-	AppSecret           string
-	ProxyAPI            string
-	Request             *requests.Client
-	Assets              *assets.ImageHost
-	GlobalMarkdown      bool
-	MarkdownVerifyImage bool
-	RetryWhen           []int
-	UploadThreshold     int
+	AppID           string
+	AppSecret       string
+	ProxyAPI        string
+	Request         *requests.Client
+	Assets          *assets.ImageHost
+	GlobalMarkdown  bool
+	RetryWhen       []int
+	UploadThreshold int
 
 	Tokens *token.Store
 
@@ -61,9 +60,8 @@ func Init(appID, appSecret, proxy string, req *requests.Client) *BotAPI {
 func (c *BotAPI) SetAssets(h *assets.ImageHost) { c.Assets = h }
 
 // SetMessageOptions 注入消息管道配置 (config 热更回调)。
-func (c *BotAPI) SetMessageOptions(globalMarkdown, markdownVerifyImage bool, retryWhen []int, uploadThreshold int) {
+func (c *BotAPI) SetMessageOptions(globalMarkdown bool, retryWhen []int, uploadThreshold int) {
 	c.GlobalMarkdown = globalMarkdown
-	c.MarkdownVerifyImage = markdownVerifyImage
 	c.RetryWhen = retryWhen
 	c.UploadThreshold = uploadThreshold
 }
