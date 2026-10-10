@@ -17,17 +17,17 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/storage"
 )
 
-// 框架级「底部按钮」: 给每条 Markdown 消息末尾追加一行可配置的按钮。
+// 框架级「底部按钮」: 给每条 Markdown 消息末尾追加可配置的底部按钮行。
 //
-// 配置写在 config.json 的 footer_buttons, 或在管理台「设置」页里一行一个地编辑:
+// 配置写在 config.json 的 footer_buttons, 或在管理台「设置」页的多行文本框里编辑。
 //
-//	标签 | 类型 | 参数 | 选项
+// 每个配置行 = 键盘上的一行按钮; 同一行可以放多个按钮, 用逗号隔开;
+// 每个按钮写成「标签 | 类型 | 参数 [; 选项]」:
 //
-//	+1   | counter | 感谢支持，当前 {{count}} 次 ; dedup=user
-//	帮助 | command | /help
-//	文档 | link    | https://example.com
+//	+1 | counter | 感谢支持，当前 {{count}} 次 ; dedup=user , 帮助 | command | /help
+//	文档 | link | https://example.com
 //
-// 类型: counter(计数) / command(指令) / link(链接); 选项是 k=v, 多个用 ';' 隔开。
+// 类型: counter(计数) / command(指令) / link(链接) / repeat(复读, 把触发这条回复的原消息填进输入框); 选项是 k=v, 多个用 ';' 隔开。
 //
 // 两个必须知道的平台事实:
 //   - 按钮上的文字在发送那一刻就写死了 —— 平台没有消息编辑接口, 所以计数只能出现在点击后的回复里,
@@ -51,6 +51,8 @@ const (
 	FooterCommand FooterKind = "command"
 	// FooterLink 链接: 点击跳转。
 	FooterLink FooterKind = "link"
+	// FooterRepeat 复读: 点击把「触发这条回复的那条原消息」填进输入框, auto=1 时直接发送。
+	FooterRepeat FooterKind = "repeat"
 )
 
 // FooterSpec 一行配置解析后的结果。
@@ -70,9 +72,11 @@ func (s FooterSpec) option(name, fallback string) string {
 	return fallback
 }
 
-// FooterParseResult 解析结果: 合法行与逐行错误(带行号)。一行写错不影响其它行。
+// FooterParseResult 解析结果: 合法按钮(展平后顺序即回调序号)、按配置行分好的键盘行、
+// 以及逐行错误(带行号)。一行写错不影响其它行。
 type FooterParseResult struct {
 	Specs  []FooterSpec
+	Rows   [][]FooterSpec
 	Errors []string
 }
 
@@ -85,38 +89,77 @@ var footerAllowedOptions = map[FooterKind][]string{
 	FooterCounter: {"key", "dedup", "scope", "style", "visited", "dup"},
 	FooterCommand: {"key", "auto", "style", "visited"},
 	FooterLink:    {"key", "style", "visited"},
+	FooterRepeat:  {"auto", "style", "visited"},
 }
 
-// ParseFooter 解析底部按钮配置, 一行一个按钮。空行与 # 开头的注释行跳过。
+// ParseFooter 解析底部按钮配置。空行与 # 开头的注释行跳过。
+//
+// 每个配置行对应键盘上的一行按钮: 同一行可以写多个按钮(用逗号隔开), 也可以一行只写一个。
+// 单个按钮写「标签 | 类型 | 参数 [; 选项]」, 详见文件头注释。
 func ParseFooter(lines []string) FooterParseResult {
 	var out FooterParseResult
 	seenKeys := make(map[string]int, len(lines))
 	for i, raw := range lines {
 		lineNo := i + 1
-		text := strings.TrimSpace(raw)
-		if text == "" || strings.HasPrefix(text, "#") {
-			continue
-		}
-		spec, err := parseFooterLine(text)
-		if err != nil {
-			out.Errors = append(out.Errors, fmt.Sprintf("第 %d 行: %v", lineNo, err))
-			continue
-		}
-		if len(out.Specs) >= footerMaxButtons {
-			out.Errors = append(out.Errors, fmt.Sprintf("第 %d 行: 底部按钮最多 %d 个, 该行被忽略", lineNo, footerMaxButtons))
-			continue
-		}
-		if spec.Kind == FooterCounter {
-			if first, dup := seenKeys[spec.Key]; dup {
-				out.Errors = append(out.Errors, fmt.Sprintf(
-					"第 %d 行: 计数键 %q 与第 %d 行重复, 用 key= 区分(或删掉一个), 该行被忽略", lineNo, spec.Key, first))
+		var row []FooterSpec
+		for _, chunk := range splitFooterLine(raw) {
+			text := strings.TrimSpace(chunk)
+			if text == "" || strings.HasPrefix(text, "#") {
 				continue
 			}
-			seenKeys[spec.Key] = lineNo
+			if len(out.Specs) >= footerMaxButtons {
+				out.Errors = append(out.Errors, fmt.Sprintf("第 %d 行: 底部按钮最多 %d 个, 多出的被忽略", lineNo, footerMaxButtons))
+				continue
+			}
+			spec, err := parseFooterLine(text)
+			if err != nil {
+				out.Errors = append(out.Errors, fmt.Sprintf("第 %d 行: %v", lineNo, err))
+				continue
+			}
+			if spec.Kind == FooterCounter {
+				if first, dup := seenKeys[spec.Key]; dup {
+					out.Errors = append(out.Errors, fmt.Sprintf(
+						"第 %d 行: 计数键 %q 与第 %d 行重复, 用 key= 区分(或删掉一个), 该按钮被忽略", lineNo, spec.Key, first))
+					continue
+				}
+				seenKeys[spec.Key] = lineNo
+			}
+			row = append(row, spec)
+			out.Specs = append(out.Specs, spec)
 		}
-		out.Specs = append(out.Specs, spec)
+		if len(row) > 0 {
+			out.Rows = append(out.Rows, row)
+		}
 	}
 	return out
+}
+
+// splitFooterLine 把一行拆成若干按钮: 用半角逗号分隔。
+// 只有逗号后面那截「看起来像一个按钮」(带 | 且第二段是合法类型)时才真的拆,
+// 否则逗号算文案的一部分 —— 这样「感谢支持, 当前 {{count}} 次」不会被拆坏。
+func splitFooterLine(line string) []string {
+	if !strings.Contains(line, ",") {
+		return []string{line}
+	}
+	chunks := strings.Split(line, ",")
+	out := []string{chunks[0]}
+	for _, chunk := range chunks[1:] {
+		if footerLooksLikeButton(chunk) {
+			out = append(out, chunk)
+			continue
+		}
+		out[len(out)-1] += "," + chunk
+	}
+	return out
+}
+
+func footerLooksLikeButton(chunk string) bool {
+	parts := strings.Split(chunk, "|")
+	if len(parts) < 2 {
+		return false
+	}
+	_, err := parseFooterKind(strings.TrimSpace(parts[1]))
+	return err == nil
 }
 
 func parseFooterLine(text string) (FooterSpec, error) {
@@ -164,8 +207,10 @@ func parseFooterKind(raw string) (FooterKind, error) {
 		return FooterCommand, nil
 	case "link", "链接":
 		return FooterLink, nil
+	case "repeat", "复读", "回填":
+		return FooterRepeat, nil
 	}
-	return "", fmt.Errorf("类型 %q 不认识, 只能是 counter(计数) / command(指令) / link(链接)", raw)
+	return "", fmt.Errorf("类型 %q 不认识, 只能是 counter(计数) / command(指令) / link(链接) / repeat(复读)", raw)
 }
 
 func parseFooterOptions(text string) (map[string]string, error) {
@@ -246,6 +291,13 @@ func (s FooterSpec) validate() error {
 		if err != nil || target.Host == "" || (target.Scheme != "http" && target.Scheme != "https") {
 			return fmt.Errorf("link 的第 3 段要是 http(s) 链接, 收到 %q", s.Arg)
 		}
+	case FooterRepeat:
+		if s.Arg != "" {
+			return errors.New("repeat(复读) 不用写第 3 段: 它填的就是触发这条回复的原消息, 把这段删掉")
+		}
+		if auto, ok := s.Options["auto"]; ok && auto != "0" && auto != "1" {
+			return fmt.Errorf("auto 只能是 0 或 1, 收到 %q", auto)
+		}
 	}
 	return nil
 }
@@ -270,29 +322,61 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// FooterButtons 按解析结果构造底部按钮行; 空配置返回 nil。
-func FooterButtons(specs []FooterSpec) []Button {
+// footerButton 把一条配置变成按钮; ok=false 表示这条在当前消息上放不了(目前只有「没有原消息的复读」)。
+// index 是它在整份配置里的序号, 也是回调按钮携带的序号。
+func footerButton(spec FooterSpec, index int, originalInput string) (Button, bool) {
+	btn := Button{
+		Id: footerButtonID(index),
+		RenderData: RenderData{
+			Label:   spec.Label,
+			Visited: spec.option("visited", footerDefaultVisited(spec.Kind)),
+			Style:   footerStyle(spec.option("style", "blue")),
+		},
+	}
+	switch spec.Kind {
+	case FooterCounter:
+		btn.SetCallbackWithoutHandle(strconv.Itoa(index))
+	case FooterCommand:
+		btn.SetAutoCommand(spec.Arg, spec.option("auto", "0") == "1", false)
+	case FooterLink:
+		btn.SetHref(spec.Arg)
+	case FooterRepeat:
+		if strings.TrimSpace(originalInput) == "" {
+			return Button{}, false
+		}
+		btn.SetAutoCommand(originalInput, spec.option("auto", "0") == "1", false)
+	}
+	btn.SetPermission(AllUser)
+	btn.SetUnsupportedTip(defaultUnsupportedTip)
+	return btn, true
+}
+
+// FooterButtons 按解析结果构造一整排底部按钮; 放不了的按钮会被跳过。空配置返回 nil。
+func FooterButtons(specs []FooterSpec, originalInput string) []Button {
 	out := make([]Button, 0, len(specs))
 	for i, spec := range specs {
-		btn := Button{
-			Id: footerButtonID(i),
-			RenderData: RenderData{
-				Label:   spec.Label,
-				Visited: spec.option("visited", footerDefaultVisited(spec.Kind)),
-				Style:   footerStyle(spec.option("style", "blue")),
-			},
+		if btn, ok := footerButton(spec, i, originalInput); ok {
+			out = append(out, btn)
 		}
-		switch spec.Kind {
-		case FooterCounter:
-			btn.SetCallbackWithoutHandle(strconv.Itoa(i))
-		case FooterCommand:
-			btn.SetAutoCommand(spec.Arg, spec.option("auto", "0") == "1", false)
-		case FooterLink:
-			btn.SetHref(spec.Arg)
+	}
+	return out
+}
+
+// footerButtonRows 按配置行分组构造按钮; 放不了的按钮从所在行去掉, 空行不出现。
+func footerButtonRows(result FooterParseResult, originalInput string) [][]Button {
+	var out [][]Button
+	flat := 0
+	for _, row := range result.Rows {
+		list := make([]Button, 0, len(row))
+		for range row {
+			if btn, ok := footerButton(result.Specs[flat], flat, originalInput); ok {
+				list = append(list, btn)
+			}
+			flat++
 		}
-		btn.SetPermission(AllUser)
-		btn.SetUnsupportedTip(defaultUnsupportedTip)
-		out = append(out, btn)
+		if len(list) > 0 {
+			out = append(out, list)
+		}
 	}
 	return out
 }
@@ -303,7 +387,7 @@ func footerDefaultVisited(kind FooterKind) string {
 	switch kind {
 	case FooterCounter:
 		return "已投"
-	case FooterCommand:
+	case FooterCommand, FooterRepeat:
 		return "已填入"
 	}
 	return ""
@@ -316,18 +400,22 @@ func footerStyle(name string) ButtonStyle {
 	return Blue
 }
 
-// FooterMerge 是给 message.SetFooterHook 用的合并函数: 给消息原有键盘追加一行底部按钮。
-// 插件自己排好的行不动; 键盘已满时放弃底部按钮并记警告, 保证插件 UI 不被破坏。
-func FooterMerge(kb contract.CanMarshal) contract.CanMarshal {
-	specs, errs := currentFooterSpecs()
+// FooterMerge 是给 message.SetFooterHook 用的合并函数: 按配置行给消息原有键盘追加底部按钮行。
+// originalInput 是触发这条消息的原消息文本(主动推送时为空); 复读按钮靠它把原文填回用户输入框。
+// 插件自己排好的行不动; 键盘已满时放弃放不下的底部行并记警告, 保证插件 UI 不被破坏。
+func FooterMerge(kb contract.CanMarshal, originalInput string) contract.CanMarshal {
+	result, errs := currentFooterResult()
 	logFooterErrors(errs)
-	if len(specs) == 0 {
+	if len(result.Specs) == 0 {
 		return kb
 	}
-	row := FooterButtons(specs)
+	rows := footerButtonRows(result, originalInput)
+	if len(rows) == 0 {
+		return kb
+	}
 	if kb == nil {
 		fresh := &Keyboard{}
-		if !AppendRow(fresh, row...) {
+		if !appendFooterRows(fresh, rows) {
 			return nil
 		}
 		return fresh
@@ -337,10 +425,19 @@ func FooterMerge(kb contract.CanMarshal) contract.CanMarshal {
 		logger.Warnf("消息上挂的是非 Keyboard 实现的按钮板, 放弃追加底部按钮")
 		return kb
 	}
-	if !AppendRow(existing, row...) {
-		logger.Warnf("按钮板已满 %d 行, 放弃追加底部按钮(插件按钮优先)", maxBuilderRows)
-	}
+	appendFooterRows(existing, rows)
 	return existing
+}
+
+// appendFooterRows 把按钮行逐行追加到键盘末尾; 某行装不下时停止并返回 false。
+func appendFooterRows(kb *Keyboard, rows [][]Button) bool {
+	for _, row := range rows {
+		if !AppendRow(kb, row...) {
+			logger.Warnf("按钮板已满 %d 行, 放弃追加底部按钮(插件按钮优先)", maxBuilderRows)
+			return false
+		}
+	}
+	return true
 }
 
 var (
@@ -348,9 +445,9 @@ var (
 	footerOnce   sync.Once
 	footerCache  struct {
 		sync.Mutex
-		ready bool
-		raw   string
-		specs []FooterSpec
+		ready  bool
+		raw    string
+		result FooterParseResult
 	}
 )
 
@@ -368,21 +465,27 @@ func DisableFooter() {
 	message.SetFooterHook(nil)
 }
 
-// currentFooterSpecs 读一次配置并解析; 同一批配置只解析一次, 错误也只报一次, 避免逐条消息刷屏。
-func currentFooterSpecs() ([]FooterSpec, []string) {
+// currentFooterResult 读一次配置并解析; 同一批配置只解析一次, 错误也只报一次, 避免逐条消息刷屏。
+func currentFooterResult() (FooterParseResult, []string) {
 	src := footerSource.Load()
 	if src == nil {
-		return nil, nil
+		return FooterParseResult{}, nil
 	}
 	raw := strings.Join((*src)(), "\n")
 	footerCache.Lock()
 	defer footerCache.Unlock()
 	if footerCache.ready && raw == footerCache.raw {
-		return footerCache.specs, nil
+		return footerCache.result, nil
 	}
 	result := ParseFooter(strings.Split(raw, "\n"))
-	footerCache.ready, footerCache.raw, footerCache.specs = true, raw, result.Specs
-	return result.Specs, result.Errors
+	footerCache.ready, footerCache.raw, footerCache.result = true, raw, result
+	return result, result.Errors
+}
+
+// currentFooterSpecs 只取展平后的按钮列表(回调分发用), 顺序即回调序号。
+func currentFooterSpecs() ([]FooterSpec, []string) {
+	result, errs := currentFooterResult()
+	return result.Specs, errs
 }
 
 func logFooterErrors(errs []string) {

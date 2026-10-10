@@ -22,6 +22,8 @@ type MessageManager struct {
 	Qapi      *api.BotAPI
 	ref       *message.MsgRef
 	PluginId  string
+	// OriginalInput 触发这条回复的原消息文本(主动发送/主动推送时为空); 底部「复读」按钮用它回填。
+	OriginalInput string
 }
 
 // CanReply 表示当前上下文带有平台给的被动回复锚点。
@@ -31,12 +33,13 @@ func (manager *MessageManager) CanReply() bool {
 
 func (manager *MessageManager) baseStruct() *message.Message {
 	msg := &message.Message{
-		EventId: manager.EventId,
-		MsgId:   manager.MessageId,
-		Qapi:    manager.Qapi,
-		GroupId: manager.GroupId,
-		UserId:  manager.UserId,
-		Target:  manager.Target,
+		EventId:       manager.EventId,
+		MsgId:         manager.MessageId,
+		Qapi:          manager.Qapi,
+		GroupId:       manager.GroupId,
+		UserId:        manager.UserId,
+		Target:        manager.Target,
+		OriginalInput: manager.OriginalInput,
 	}
 	if manager.ref == nil {
 		msg.InitRef()

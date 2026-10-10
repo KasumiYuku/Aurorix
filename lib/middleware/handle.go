@@ -64,6 +64,8 @@ func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts command
 	ctx.Init(payload.Data.Id, payload.ID, client)
 	ctx.BindStorage(resolvedCommand.PluginId, commandPath)
 	ctx.PluginId = resolvedCommand.PluginId
+	// 记下触发本次指令的原消息文本, 供底部「复读」按钮把原文回填到输入框。
+	ctx.MessageManager.OriginalInput = payload.Data.Content
 	if opts.groupID != "" {
 		ctx.SetGroupId(opts.groupID)
 	}
