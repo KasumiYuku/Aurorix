@@ -98,13 +98,13 @@ func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts command
 	}
 
 	if resolvedCommand.Args != nil {
-		parsed, _, err := parser.ParseArgs(commandPath, resolvedCommand.Args, rest)
+		parsed, usage, err := parser.ParseArgs(commandPath, resolvedCommand.Args, rest)
 		if err != nil {
 			content, terr := templates.FillMarkdownTemplate("Card", templates.Args{
 				"title": "❌ 指令参数错误",
 				"fields": []any{
 					map[string]any{"label": "原因", "content": err.Error()},
-					map[string]any{"label": "用法", "content": usageText(commandPath)},
+					map[string]any{"label": "用法", "content": usageOrPath(usage, commandPath)},
 				},
 			})
 			if terr != nil {
@@ -150,6 +150,15 @@ func rawArgs(content string, tokens, rest []string, rootCommand *plugin.Command)
 		}
 	}
 	return strings.Join(rest, " ")
+}
+
+// usageOrPath 优先用解析器给的完整用法(命令 + 位置参数 + flags 及其说明);
+// 解析器拿不到时才退回"前缀 + 命令路径" —— 后者只说命令名, 等于没告诉用户参数怎么写。
+func usageOrPath(usage, commandPath string) string {
+	if strings.TrimSpace(usage) != "" {
+		return usage
+	}
+	return usageText(commandPath)
 }
 
 func usageText(path string) string {
