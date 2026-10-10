@@ -59,3 +59,16 @@ func rowButtonCount(rows []Buttons) int {
 	}
 	return total
 }
+
+// AppendRow 在键盘末尾追加一整行, 不动已有的行(与会整体重排的 MergeTrailing 区分开)。
+// 键盘已满 maxBuilderRows 行时返回 false, 由调用方决定记日志还是放弃。
+func AppendRow(kb *Keyboard, list ...Button) bool {
+	if kb == nil || len(list) == 0 {
+		return false
+	}
+	if len(kb.Rows) >= maxBuilderRows {
+		return false
+	}
+	kb.Rows = append(kb.Rows, Buttons{List: append([]Button(nil), list...)})
+	return true
+}

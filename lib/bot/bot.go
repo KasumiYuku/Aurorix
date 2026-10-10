@@ -103,6 +103,16 @@ func Run() {
 	}
 	client.SetMessageOptions(appConfig.GlobalMarkdown, appConfig.RetryWhen, appConfig.UploadThreshold)
 
+	// 框架级底部按钮: 每次发送时现读配置, 所以管理台改完立即生效(无需重启)。
+	// 开关关掉时只给空配置 —— 用户填的按钮原样留着, 只是不再追加。
+	buttons.EnableFooter(func() []string {
+		cfg := config.Current()
+		if !cfg.FooterEnabled() {
+			return nil
+		}
+		return cfg.FooterButtons
+	})
+
 	push.Init(client)
 	schedule.Start(client)
 	state.Boot(appConfig.Protocol, int(appConfig.Port))

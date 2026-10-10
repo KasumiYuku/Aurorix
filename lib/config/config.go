@@ -15,25 +15,27 @@ import (
 var configLock sync.Mutex
 
 type AppConfig struct {
-	Port            uint16                    `json:"port"`
-	AppId           string                    `json:"appid"`
-	AppSecret       string                    `json:"secret"`
-	ProxyAPI        string                    `json:"proxy"`
-	Database        string                    `json:"database"`
-	AdminPassword   string                    `json:"admin_password"`
-	Protocol        string                    `json:"protocol,omitempty"`
-	Intents         []string                  `json:"intents,omitempty"`
-	GatewayURL      string                    `json:"gateway_url,omitempty"`
-	GlobalMarkdown  bool                      `json:"global_markdown,omitempty"`
-	RetryWhen       []int                     `json:"retry_when,omitempty"`
-	UploadThreshold int                       `json:"upload_threshold,omitempty"`
-	LogLevel        string                    `json:"log_level,omitempty"`
-	Prefixes        []string                  `json:"prefixes,omitempty"`
-	MemoryLimitMB   int                       `json:"memory_limit_mb,omitempty"`
-	GCPercent       int                       `json:"gc_percent,omitempty"`
-	PProfAddr       string                    `json:"pprof_addr,omitempty"`
-	PluginSettings  map[string]map[string]any `json:"plugin_settings"`
-	PluginAccess    map[string]AccessConfig   `json:"plugin_access"`
+	Port                 uint16                    `json:"port"`
+	AppId                string                    `json:"appid"`
+	AppSecret            string                    `json:"secret"`
+	ProxyAPI             string                    `json:"proxy"`
+	Database             string                    `json:"database"`
+	AdminPassword        string                    `json:"admin_password"`
+	Protocol             string                    `json:"protocol,omitempty"`
+	Intents              []string                  `json:"intents,omitempty"`
+	GatewayURL           string                    `json:"gateway_url,omitempty"`
+	GlobalMarkdown       bool                      `json:"global_markdown,omitempty"`
+	FooterButtons        []string                  `json:"footer_buttons,omitempty"`
+	FooterButtonsEnabled *bool                     `json:"footer_buttons_enabled,omitempty"`
+	RetryWhen            []int                     `json:"retry_when,omitempty"`
+	UploadThreshold      int                       `json:"upload_threshold,omitempty"`
+	LogLevel             string                    `json:"log_level,omitempty"`
+	Prefixes             []string                  `json:"prefixes,omitempty"`
+	MemoryLimitMB        int                       `json:"memory_limit_mb,omitempty"`
+	GCPercent            int                       `json:"gc_percent,omitempty"`
+	PProfAddr            string                    `json:"pprof_addr,omitempty"`
+	PluginSettings       map[string]map[string]any `json:"plugin_settings"`
+	PluginAccess         map[string]AccessConfig   `json:"plugin_access"`
 }
 
 type AccessRule struct {
@@ -298,6 +300,18 @@ func applyCoreKey(cfg *AppConfig, key string, rawValue json.RawMessage) error {
 			return fmt.Errorf("log_level 只能为 debug/info/warn/error")
 		}
 		cfg.LogLevel = v
+	case "footer_buttons":
+		var v []string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("footer_buttons: %w", err)
+		}
+		cfg.FooterButtons = cleanStrings(v)
+	case "footer_buttons_enabled":
+		var v bool
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("footer_buttons_enabled: %w", err)
+		}
+		cfg.FooterButtonsEnabled = &v
 	default:
 		return fmt.Errorf("%w: %s", errCoreUnknownKey, key)
 	}
@@ -313,4 +327,10 @@ func cleanStrings(values []string) []string {
 		}
 	}
 	return out
+}
+
+// FooterEnabled 报告底部按钮是否启用。该开关省略时视为启用 —— 只填了按钮列表就能生效,
+// 显式写 false 才是「静音但保留配置」。
+func (cfg AppConfig) FooterEnabled() bool {
+	return cfg.FooterButtonsEnabled == nil || *cfg.FooterButtonsEnabled
 }

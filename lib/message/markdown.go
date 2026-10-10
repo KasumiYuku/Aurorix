@@ -18,8 +18,10 @@ type MarkdownMessage struct {
 
 // 实现CanMarshal接口
 func (msg *MarkdownMessage) Marshal() ([]byte, error) {
-	if msg.keyboard != nil {
-		keyboardData, err := msg.keyboard.Marshal()
+	// 框架级底部按钮在这里合入: 插件自己的键盘优先, 底部按钮追加在最后一行
+	keyboard := applyFooter(msg.keyboard)
+	if keyboard != nil {
+		keyboardData, err := keyboard.Marshal()
 		if err != nil {
 			return nil, &JSONMarshalError{Err: err}
 		}

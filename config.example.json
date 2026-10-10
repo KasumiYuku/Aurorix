@@ -21,6 +21,11 @@
   "retry_when": [11253, 630006],
   "upload_threshold": 3145728,
   "log_level": "info",
+  "footer_buttons_enabled": true,
+  "footer_buttons": [
+    "+1 | counter | 感谢 {{user}}，当前 {{count}} 次",
+    "帮助 | command | /help"
+  ],
   "plugin_settings": {
     "imagegen": {
       "base_url": "https://api.openai.com/v1",

@@ -38,6 +38,8 @@ var coreSpecs = []coreField{
 	{Key: "global_markdown", Label: "全局 Markdown 回复", Kind: "bool", Hot: true},
 	{Key: "retry_when", Label: "消息重试错误码", Desc: "每行一个业务错误码", Kind: "intlist", Hot: true},
 	{Key: "upload_threshold", Label: "分片上传阈值(字节)", Kind: "number", Hot: true},
+	{Key: "footer_buttons_enabled", Label: "启用底部按钮", Desc: "关掉后保留下面的配置, 但不再往消息里追加", Kind: "bool", Hot: true},
+	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的一行按钮。一行一个, 格式「标签 | 类型 | 参数 | 选项」, 类型 counter(计数)/command(指令)/link(链接)。例: +1 | counter | 感谢 {{count}} 次", Kind: "strlist", Hot: true},
 }
 
 func handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +83,11 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 		field.Value = cfg.RetryWhen
 	case "upload_threshold":
 		field.Value = cfg.UploadThreshold
+	case "footer_buttons":
+		field.Value = cfg.FooterButtons
+	case "footer_buttons_enabled":
+		// 开关省略时视为启用, 所以 nil 在这里也要显示成打开
+		field.Value = cfg.FooterEnabled()
 	}
 }
 
