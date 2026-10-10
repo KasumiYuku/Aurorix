@@ -187,7 +187,7 @@ mybot/plugins/hello/
 | `admin_password` | 管理台密码；留空仅本机可访问 |
 | `global_markdown` | 所有文字按 Markdown 渲染，图片/按钮内联 |
 | `footer_buttons_enabled` | 底部按钮总开关。省略即启用；设 `false` 只静音、保留配置 |
-| `footer_buttons` | 每个 Markdown 消息末尾追加的底部按钮；一行 = 键盘上一行，同一行用逗号分隔多个按钮：`标签 | 类型 | 参数 | 选项`，类型 `counter` / `command` / `link` / `repeat`（复读，把原消息回填输入框）。详见 [docs/configuration.md](docs/configuration.md) |
+| `footer_buttons` | 每个 Markdown 消息末尾追加的底部按钮；一行 = 键盘上一行，同一行用逗号分隔多个按钮：`标签 | 类型 | 参数 | 选项`，类型 `counter` / `command` / `link` / `repeat`（复读，把原消息回填输入框）/ `image`（图片，点击发图）。详见 [docs/configuration.md](docs/configuration.md) |
 | `retry_when` | 命中这些 QQ 业务错误码自动重试 |
 | `upload_threshold` | 超过该字节数走分片上传（默认 3MB） |
 | `log_level` | 控制台日志级别，可在线热更 |

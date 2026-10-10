@@ -24,7 +24,8 @@
   "footer_buttons_enabled": true,
   "footer_buttons": [
     "+1 | repeat",
-    "帮助 | command | /help"
+    "帮助 | command | /help",
+    "文档 | link | https://example.com/docs , 使用说明 | image | https://example.com/guide.png"
   ],
   "plugin_settings": {
     "imagegen": {

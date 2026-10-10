@@ -41,7 +41,7 @@ var coreSpecs = []coreField{
 	{Key: "retry_when", Label: "消息重试错误码", Desc: "每行一个业务错误码", Kind: "intlist", Hot: true},
 	{Key: "upload_threshold", Label: "分片上传阈值(字节)", Kind: "number", Hot: true},
 	{Key: "footer_buttons_enabled", Label: "启用底部按钮", Desc: "关掉后保留下面的配置, 但不再往消息里追加", Kind: "bool", Hot: true},
-	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的底部按钮。一行 = 键盘上一行, 同一行用逗号分隔多个按钮; 每个按钮写 标签|类型|参数, 类型有 counter(计数)/command(指令)/link(链接)/repeat(复读: 把触发这条回复的原消息填进用户输入框), 选项跟在参数后: ; k=v", Placeholder: "+1 | repeat , 文档 | link | https://github.com/KasumiYuku/Aurorix\n帮助 | command | /help", Kind: "textlist", Hot: true},
+	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的底部按钮。一行 = 键盘上一行, 同一行用逗号分隔多个按钮; 每个按钮写 标签|类型|参数, 类型有 counter(计数)/command(指令)/link(链接)/repeat(复读: 把触发这条回复的原消息填进用户输入框)/image(图片: 点击把那一段 URL 的图发出来), 选项跟在参数后: ; k=v", Placeholder: "+1 | repeat , 文档 | link | https://github.com/KasumiYuku/Aurorix\n帮助 | command | /help", Kind: "textlist", Hot: true},
 }
 
 func handleGetConfig(w http.ResponseWriter, r *http.Request) {
