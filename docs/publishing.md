@@ -69,6 +69,32 @@ git tag v0.1.0 && git push --tags
 - 带 Markdown 模板的插件：模板放包内 `templates/markdown/` 并挂 `TemplateFS`，**确认模板 `.md` 已进 git**（仓库 `.gitignore` 若忽略 `*.md` 需显式放行，否则拉取者编译因缺 embed 文件失败）
 - 模板需要点击填充输入框时，优先用 `{{inline "显示文字" "命令"}}` 或 `{{inline label command}}`，不要在每个模板里手写整段 `mqqapi://aio/inlinecmd?...`
 
+## 版本与发布
+
+框架和插件都是标准 Go module，版本就是 **git tag**（语义化 `vX.Y.Z`）。
+
+**发版方**
+
+```bash
+git tag v0.2.0        # 改完标注一个版本
+git push --tags       # 推上去, 使用方 go get 才拿得到这个版本
+```
+
+- 框架（本仓）发新 tag 后，插件的 `require github.com/KasumiYuku/Aurorix` 才升得动。想让插件用上新 API：先在框架仓打 tag，再去插件仓把它 `require` 的版本改过去。
+- 只改文档 / 注释这类不动 API 的改动，走补丁号（`v0.1.1`）即可。
+- **改了前端要连产物一起提交**：`lib/admin` 用 `//go:embed dist` 内嵌管理台，改完 `webui/` 先 `make web`，再把 `lib/admin/dist` 一起提交 —— 产物不在库里，别人 `go get` 下来编译会直接失败（框架 CI 里有一条专门校验产物与源码一致）。
+
+**使用方**
+
+```bash
+aurx update                            # 更新实例依赖的全部模块 + 编译校验
+aurx update github.com/某作者/某插件     # 只更新指定插件
+```
+
+`aurx update` 内部就是 `go get -u` + `go mod tidy` + `go build ./...`；它不动 replace 到本地目录的模块（那是你自己的代码）。更新完用 `aurx run` 重启实例。
+
+**CI**：框架仓与各插件仓都带 `.github/workflows/ci.yml`（格式 / 静态检查 / 竞态测试 / 构建；框架额外校验内嵌产物是否与源码一致）。发版前先确认它是绿的。
+
 ## 移除插件
 
 ```bash

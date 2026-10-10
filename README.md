@@ -187,7 +187,7 @@ mybot/plugins/hello/
 | `admin_password` | 管理台密码；留空仅本机可访问 |
 | `global_markdown` | 所有文字按 Markdown 渲染，图片/按钮内联 |
 | `footer_buttons_enabled` | 底部按钮总开关。省略即启用；设 `false` 只静音、保留配置 |
-| `footer_buttons` | 每个 Markdown 消息末尾追加的一行按钮；一行一个：`标签 | 类型 | 参数 | 选项`，类型 `counter` / `command` / `link`。详见 [docs/configuration.md](docs/configuration.md) |
+| `footer_buttons` | 每个 Markdown 消息末尾追加的底部按钮；一行 = 键盘上一行，同一行用逗号分隔多个按钮：`标签 | 类型 | 参数 | 选项`，类型 `counter` / `command` / `link` / `repeat`（复读，把原消息回填输入框）。详见 [docs/configuration.md](docs/configuration.md) |
 | `retry_when` | 命中这些 QQ 业务错误码自动重试 |
 | `upload_threshold` | 超过该字节数走分片上传（默认 3MB） |
 | `log_level` | 控制台日志级别，可在线热更 |
@@ -293,6 +293,17 @@ cd webui && pnpm build   # 等价于 make web；产物嵌入 lib/admin/dist，�
 <summary>管理台安全吗？</summary>
 
 登录使用 `admin_password`，会话为 HttpOnly Cookie（可保留 30 天）。密码留空仅本机可访问。登录失败会触发按来源 IP 的临时限流（5 分钟窗口），防密码爆破。
+
+</details>
+
+<details>
+<summary>怎么更新框架 / 插件？</summary>
+
+本地 workspace（自用 / 开发）：进对应目录 `git pull`，再重编实例即可 —— `go.mod` 里 replace 指向本地目录，不走网络。
+
+发布 / 网络插件：发版方打 tag（`git tag v0.2.0 && git push --tags`）；使用方用 `aurx update [模块]` 更新（等价于 `go get -u` + `go mod tidy` + 编译校验），再 `aurx run`。
+
+版本与发布约定见 [docs/publishing.md](docs/publishing.md)。
 
 </details>
 
