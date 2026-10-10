@@ -12,8 +12,8 @@ lib/assets/providers/*.zip
 # 只忽略顶层那一个会漏掉一堆软链接。
 node_modules/
 aurorix
-aurorix
-lib/admin/dist/
+/aurx
+# 前端产物入库(不再忽略): lib/admin 用 //go:embed dist, 产物不在库里的话别人 go get 下来编不过。
 
 # 插件:官方示例入库, 个人/生态插件目录永不追踪
 plugins/*
