@@ -60,6 +60,7 @@ func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts command
 		},
 		Raw:      opts.raw,
 		Mentions: payload.Data.Mentions,
+		Quote:    structers.ExtractQuote(payload.Data.MsgElements, payload.Data.MessageScene.Ext),
 	}
 	ctx.Init(payload.Data.Id, payload.ID, client)
 	ctx.BindStorage(resolvedCommand.PluginId, commandPath)

@@ -30,7 +30,7 @@ func parseMessageEvent(origin constant.MessageOrigin) Parser {
 			RawContent:  raw,
 			Mentions:    d.Mentions,
 			Attachments: d.Attachments,
-			Quote:       structers.ExtractQuote(d.MsgElements),
+			Quote:       structers.ExtractQuote(d.MsgElements, d.MessageScene.Ext),
 			MsgType:     d.MsgType(),
 			Ark:         d.ArkData,
 			Elements:    d.MsgElements,
