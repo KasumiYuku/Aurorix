@@ -622,8 +622,11 @@ func PrepareConfiguration(id string, input map[string]any) (map[string]any, erro
 	prepared := make(map[string]any, len(registered.Config))
 	for _, field := range registered.Config {
 		value, exists := input[field.Key]
-		if field.Type == "password" && (!exists || value == "") {
-			value, exists = current[field.Key]
+		if field.Type == "password" {
+			// 面板读回来的密码是掩码(布尔)或空, 不是用户新填的值; 只有真的收到非空字符串才算改过。
+			if s, ok := value.(string); !ok || s == "" {
+				value, exists = current[field.Key]
+			}
 		}
 		if !exists {
 			if field.Type == "boolean" {
@@ -632,12 +635,21 @@ func PrepareConfiguration(id string, input map[string]any) (map[string]any, erro
 				value = ""
 			}
 		}
-		if field.Type == "boolean" {
+		switch field.Type {
+		case "boolean":
 			if _, ok := value.(bool); !ok {
 				return nil, fmt.Errorf("field %s must be a boolean", field.Key)
 			}
-		} else if _, ok := value.(string); !ok {
-			return nil, fmt.Errorf("field %s must be a string", field.Key)
+		case "number":
+			normalized, ok := normalizeNumber(value)
+			if !ok {
+				return nil, fmt.Errorf("field %s must be a number", field.Key)
+			}
+			value = normalized
+		default:
+			if _, ok := value.(string); !ok {
+				return nil, fmt.Errorf("field %s must be a string", field.Key)
+			}
 		}
 		prepared[field.Key] = value
 	}
@@ -647,6 +659,19 @@ func PrepareConfiguration(id string, input map[string]any) (map[string]any, erro
 		}
 	}
 	return prepared, nil
+}
+
+// normalizeNumber 数字字段从 JSON 面板回传是 number, 从配置文件读回来是字符串, 两种都认。
+func normalizeNumber(value any) (any, bool) {
+	switch v := value.(type) {
+	case nil:
+		return "", true
+	case float64, int, int64:
+		return v, true
+	case string:
+		return v, true
+	}
+	return nil, false
 }
 
 func ApplyConfiguration(id string, settings map[string]any) error {
