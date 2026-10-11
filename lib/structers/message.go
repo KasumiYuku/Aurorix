@@ -52,6 +52,8 @@ type MsgAuthor struct {
 type Quote struct {
 	Author  string
 	Content string
+	// Attachments 是引用那条消息里的附件(图/视频/文件), 光有 Content 时是一串空的占位。
+	Attachments []message.Attachment
 }
 
 // ParseMentions 从 JSON 原始提及数组解析为结构化 Mentions。
@@ -75,7 +77,7 @@ func ExtractQuote(elements []MsgElement) *Quote {
 	if first.Content == "" && len(first.Attachments) == 0 {
 		return nil
 	}
-	q := &Quote{Content: first.Content}
+	q := &Quote{Content: first.Content, Attachments: first.Attachments}
 	if first.Author != nil {
 		q.Author = first.Author.Username
 	}
