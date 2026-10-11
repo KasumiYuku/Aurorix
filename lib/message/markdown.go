@@ -3,6 +3,7 @@ package message
 import (
 	"encoding/json"
 	"github.com/KasumiYuku/Aurorix/lib/assets"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"github.com/KasumiYuku/Aurorix/lib/contract"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
@@ -53,6 +54,10 @@ func (msg *MarkdownMessage) Keyboard(keyboard contract.CanMarshal) {
 }
 
 // Init 初始化消息结构体并做 markdown 预处理。
+//
+// 消息类型在**这里**钉成 markdown: 这是这种消息唯一的出站形态, 谁也漏不掉(与 MediaMessage.Init 同一条
+// 约定)。漏了它就是一份"msg_type=0 却没有 content"的报文, 平台按纯文本校验, 回一句
+// 消息content字段不能为空 —— 从 ImageMessage 直接 Send 过去的图就踩这个。
 func (msg *MarkdownMessage) Init() {
 	var metamsg *Message
 	if msg.Message == nil {
@@ -62,6 +67,7 @@ func (msg *MarkdownMessage) Init() {
 		metamsg = msg.Message
 	}
 	metamsg.MarshalInterface = msg
+	metamsg.Type = constant.Markdown
 	msg.Message = metamsg
 }
 
