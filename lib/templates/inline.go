@@ -41,15 +41,25 @@ func processInlineCommands(template string, flat map[string]string) (string, err
 			return match
 		}
 		tag := strings.TrimSpace(match[2 : len(match)-2])
-		if !isInlineCall(tag) {
-			return match
+		// 模板里可用的函数都在这里分发: 加一个只需加一条分支,
+		// 而不必在填充流程里再加一个步骤。
+		switch {
+		case isInlineCall(tag):
+			rendered, err := renderInlineCommand(tag, flat)
+			if err != nil {
+				firstErr = err
+				return match
+			}
+			return rendered
+		case isQQCardCall(tag):
+			rendered, err := renderQQCard(tag, flat)
+			if err != nil {
+				firstErr = err
+				return match
+			}
+			return rendered
 		}
-		rendered, err := renderInlineCommand(tag, flat)
-		if err != nil {
-			firstErr = err
-			return match
-		}
-		return rendered
+		return match
 	})
 	if firstErr != nil {
 		return "", firstErr

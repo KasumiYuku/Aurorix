@@ -182,19 +182,19 @@ var placeholderRe = regexp.MustCompile(`\{\{(.*?)\}\}`)
 func processTemplate(input string) (string, []string) {
 	var args []string
 	seen := make(map[string]bool)
-	inEach := false
+	inBlock := false
 	result := placeholderRe.ReplaceAllStringFunc(input, func(match string) string {
 		trimmed := strings.TrimSpace(match[2 : len(match)-2])
 		switch {
 		case strings.HasPrefix(trimmed, "#each"):
-			inEach = true
+			inBlock = true
 			return "{{" + trimmed + "}}"
 		case trimmed == "/each":
-			inEach = false
-			return "{{/each}}"
+			inBlock = false
+			return "{{" + trimmed + "}}"
 		}
 		if isInlineCall(trimmed) {
-			if !inEach {
+			if !inBlock {
 				for _, name := range inlineArgNames(trimmed) {
 					if name != "" && !seen[name] {
 						seen[name] = true
@@ -204,7 +204,18 @@ func processTemplate(input string) (string, []string) {
 			}
 			return "{{" + trimmed + "}}"
 		}
-		if trimmed != "" && !seen[trimmed] && !inEach {
+		if isQQCardCall(trimmed) {
+			if !inBlock {
+				for _, name := range qqCardArgNames(trimmed) {
+					if name != "" && !seen[name] {
+						seen[name] = true
+						args = append(args, name)
+					}
+				}
+			}
+			return "{{" + trimmed + "}}"
+		}
+		if trimmed != "" && !seen[trimmed] && !inBlock {
 			seen[trimmed] = true
 			args = append(args, trimmed)
 		}
@@ -277,7 +288,6 @@ func processEach(template string, arg Args, flat map[string]string) (string, err
 	return out.String(), nil
 }
 
-// FillMarkdownTemplate 全局命名空间填充 markdown 模板并校验是否仍有未填充项。
 func FillMarkdownTemplate(Id string, arg Args) (string, error) {
 	return fillFor(kindMarkdown, "", Id, arg)
 }
