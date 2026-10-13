@@ -21,11 +21,17 @@ type MarkdownMessage struct {
 func (msg *MarkdownMessage) Marshal() ([]byte, error) {
 	// 框架级底部按钮在这里合入: 插件自己的键盘优先, 底部按钮追加在最后一行。
 	// 原消息文本一并交给钩子 —— 「复读」按钮要把它填回用户输入框。
+	// NoFooter 是豁免开关: 指令声明或逐条指定之后, 这条消息一个底部按钮都不加。
 	originalInput := ""
+	skipFooter := false
 	if msg.Message != nil {
 		originalInput = msg.OriginalInput
+		skipFooter = msg.NoFooter
 	}
-	keyboard := applyFooter(msg.keyboard, originalInput)
+	keyboard := msg.keyboard
+	if !skipFooter {
+		keyboard = applyFooter(msg.keyboard, originalInput)
+	}
 	if keyboard != nil {
 		keyboardData, err := keyboard.Marshal()
 		if err != nil {

@@ -70,6 +70,8 @@ ctx.Msg().
 
 > 想让**每条** Markdown 消息都自动带一行按钮（比如「+1」点赞），不必逐条构造键盘：配好 `footer_buttons`，框架会在发送前把它追加到消息末尾。见 [configuration.md](configuration.md#底部按钮footer_buttons)。
 
+> 反过来，某条指令不想要这行按钮，就在 `plugin.Command` 上写 `NoFooter: true`；只有这一条不想带，就 `ctx.Msg().NoFooter()`。
+
 ### 构造
 
 ```go

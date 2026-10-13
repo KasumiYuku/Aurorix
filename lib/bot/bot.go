@@ -29,6 +29,7 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/structers"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"io"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -196,14 +197,14 @@ func Run() {
 		}()
 	}
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", appConfig.Port),
+		Addr:              net.JoinHostPort(appConfig.ListenAddr, strconv.Itoa(int(appConfig.Port))),
 		Handler:           recoverHTTP(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	logger.Infof("管理台: http://127.0.0.1:%d/admin", appConfig.Port)
+	logger.Infof("管理台: http://%s/admin", net.JoinHostPort(appConfig.ListenAddr, strconv.Itoa(int(appConfig.Port))))
 	logger.Infof("注册了%v个Markdown模板, %v个HTML模板", templates.GetMarkdownTemplateCount(), templates.GetHTMLTemplateCount())
 	logger.Infof("注册了%v个指令", plugin.GetCommandCount())
 	logger.Infof("注册了%v个定时任务", schedule.GetJobCount())

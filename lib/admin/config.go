@@ -27,6 +27,7 @@ type coreField struct {
 
 var coreSpecs = []coreField{
 	{Key: "port", Label: "监听端口", Kind: "number", Restart: true},
+	{Key: "listen_addr", Label: "HTTP 监听地址", Desc: "管理台与 webhook 回调的绑定地址; 留空按协议取默认值(websocket 只绑 127.0.0.1, webhook 绑 0.0.0.0)。改完要重启", Kind: "text", Restart: true},
 	{Key: "appid", Label: "机器人 AppID", Kind: "text", Restart: true},
 	{Key: "secret", Label: "AppSecret", Desc: "不会回显, 留空保持原值", Kind: "secret", Restart: true},
 	{Key: "proxy", Label: "API 代理地址", Kind: "text", Restart: true},
@@ -59,6 +60,8 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 	switch field.Key {
 	case "port":
 		field.Value = cfg.Port
+	case "listen_addr":
+		field.Value = cfg.ListenAddr
 	case "appid":
 		field.Value = cfg.AppId
 	case "secret":

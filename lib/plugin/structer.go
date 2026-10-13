@@ -15,6 +15,7 @@ type Command struct {
 	Aliases            []string
 	Role               constant.RoleRequired
 	DisablePrivate     bool
+	NoFooter           bool // 这条指令的回复不带框架级底部按钮, 它的子指令一并豁免
 	Describe           string
 	Handle             CommandHandleFunc
 	PermissionDenied   PermissionDeniedHandleFunc

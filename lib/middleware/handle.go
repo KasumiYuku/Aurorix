@@ -67,6 +67,8 @@ func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts command
 	ctx.PluginId = resolvedCommand.PluginId
 	// 记下触发本次指令的原消息文本, 供底部「复读」按钮把原文回填到输入框。
 	ctx.MessageManager.OriginalInput = payload.Data.Content
+	// 指令声明了豁免(或它挂在声明的根指令下)时, 本次回复一律不追加底部按钮。
+	ctx.MessageManager.NoFooter = rootCommand.NoFooter || resolvedCommand.NoFooter
 	if opts.groupID != "" {
 		ctx.SetGroupId(opts.groupID)
 	}

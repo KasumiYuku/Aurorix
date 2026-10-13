@@ -25,6 +25,8 @@ type Message struct {
 	initiativePush   bool                   `json:"-"`
 	// OriginalInput 触发这条回复的原消息文本(主动推送时为空); 底部「复读」按钮用它把原文回填到输入框。
 	OriginalInput string `json:"-"`
+	// NoFooter 为 true 时这条消息不追加框架级底部按钮。
+	NoFooter bool `json:"-"`
 }
 
 // MessageReference 引用回复：message_id 为被引用的原消息 ID。

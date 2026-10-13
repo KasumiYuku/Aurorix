@@ -15,6 +15,7 @@ type MsgBuilder struct {
 	kb         contract.CanMarshal
 	quote      string
 	initiative bool
+	noFooter   bool
 }
 
 // Msg 开启一条消息链。
@@ -81,6 +82,12 @@ func (b *MsgBuilder) Quote(messageID string) *MsgBuilder {
 // Initiative 标记本次发送为主动推送。
 func (b *MsgBuilder) Initiative() *MsgBuilder {
 	b.initiative = true
+	return b
+}
+
+// NoFooter 让这条消息不带框架级底部按钮, 用于指令级豁免之外的逐条覆盖。
+func (b *MsgBuilder) NoFooter() *MsgBuilder {
+	b.noFooter = true
 	return b
 }
 
@@ -224,6 +231,9 @@ func (b *MsgBuilder) plan() []Sender {
 			content = " "
 		}
 		mdMsg := b.m.Markdown(content)
+		if b.noFooter {
+			mdMsg.NoFooter = true
+		}
 		if b.kb != nil {
 			mdMsg.Keyboard(b.kb)
 		}

@@ -162,20 +162,18 @@ func (f *FilesAPI) chunkedUpload(target constant.MessageOrigin, groupID, userID 
 		start := (part.Index - 1) * blockSize
 		end := min(start+blockSize, len(up.Data))
 		chunk := up.Data[start:end]
-		if _, err := f.api.Request.DoBytesTimeout("PUT", part.PresignedURL, requests.Bytes(chunk), partHeader, partTimeout(len(chunk))); err != nil {
-			return MediaResult{}, fmt.Errorf("upload part %d: %w", part.Index, err)
+
+		last := error(nil)
+		for attempt := 1; attempt <= partAttempts; attempt++ {
+			if last = f.uploadPart(part.PresignedURL, finishEndpoint, prep.UploadID, part.Index, chunk, partHeader); last == nil {
+				break
+			}
+			if attempt < partAttempts {
+				time.Sleep(partRetryDelay * time.Duration(attempt))
+			}
 		}
-		type partFinishRequest struct {
-			UploadID  string `json:"upload_id"`
-			PartIndex int    `json:"part_index"`
-			BlockSize int    `json:"block_size"`
-			MD5       string `json:"md5"`
-		}
-		if _, err := f.api.doWithin("POST", finishEndpoint, requests.JSON(partFinishRequest{
-			UploadID: prep.UploadID, PartIndex: part.Index,
-			BlockSize: len(chunk), MD5: md5HexBytes(chunk),
-		}), uploadBudget(len(chunk))); err != nil {
-			return MediaResult{}, fmt.Errorf("upload part finish %d: %w", part.Index, err)
+		if last != nil {
+			return MediaResult{}, fmt.Errorf("upload part %d 试了 %d 次: %w", part.Index, partAttempts, last)
 		}
 	}
 
@@ -209,6 +207,33 @@ func (f *FilesAPI) chunkedUpload(target constant.MessageOrigin, groupID, userID 
 		TTL: result.TTL, RawURL: result.RawURL,
 	}, nil
 }
+
+// uploadPart 传一片再让它生效; 两步合成一组重试 —— QQ 的 part_finish 会回
+// 40093001 "文件上传失败，请重试", 它自己就在说这次是暂时的。
+// 一次不成就放弃的话, 大文件几乎必然在某一片上翻车。
+func (f *FilesAPI) uploadPart(presigned, finishEndpoint, uploadID string, index int, chunk []byte, headers map[string]string) error {
+	if _, err := f.api.Request.DoBytesTimeout("PUT", presigned, requests.Bytes(chunk), headers, partTimeout(len(chunk))); err != nil {
+		return fmt.Errorf("upload part %d: %w", index, err)
+	}
+	type partFinishRequest struct {
+		UploadID  string `json:"upload_id"`
+		PartIndex int    `json:"part_index"`
+		BlockSize int    `json:"block_size"`
+		MD5       string `json:"md5"`
+	}
+	if _, err := f.api.doWithin("POST", finishEndpoint, requests.JSON(partFinishRequest{
+		UploadID: uploadID, PartIndex: index, BlockSize: len(chunk), MD5: md5HexBytes(chunk),
+	}), uploadBudget(len(chunk))); err != nil {
+		return fmt.Errorf("upload part finish %d: %w", index, err)
+	}
+	return nil
+}
+
+// 一片最多试几次、每次之间退避多久: QQ 的 part_finish 会回 40093001 "文件上传失败，请重试"。
+const (
+	partAttempts   = 3
+	partRetryDelay = 800 * time.Millisecond
+)
 
 func partTimeout(size int) time.Duration {
 	return sizeBudget(size, time.Minute, 10*time.Minute, 128<<10)

@@ -24,6 +24,8 @@ type MessageManager struct {
 	PluginId  string
 	// OriginalInput 触发这条回复的原消息文本(主动发送/主动推送时为空); 底部「复读」按钮用它回填。
 	OriginalInput string
+	// NoFooter 为 true 时这条回复不追加框架级底部按钮(指令声明豁免时由框架置上)。
+	NoFooter bool
 }
 
 // CanReply 表示当前上下文带有平台给的被动回复锚点。
@@ -40,6 +42,7 @@ func (manager *MessageManager) baseStruct() *message.Message {
 		UserId:        manager.UserId,
 		Target:        manager.Target,
 		OriginalInput: manager.OriginalInput,
+		NoFooter:      manager.NoFooter,
 	}
 	if manager.ref == nil {
 		msg.InitRef()

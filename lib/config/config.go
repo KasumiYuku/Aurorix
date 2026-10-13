@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"github.com/KasumiYuku/Aurorix/lib/utils"
+	"net"
 	"os"
 	"slices"
 	"strings"
@@ -16,6 +17,7 @@ var configLock sync.Mutex
 
 type AppConfig struct {
 	Port                 uint16                    `json:"port"`
+	ListenAddr           string                    `json:"listen_addr,omitempty"`
 	AppId                string                    `json:"appid"`
 	AppSecret            string                    `json:"secret"`
 	ProxyAPI             string                    `json:"proxy"`
@@ -83,6 +85,16 @@ func normalize(cfg *AppConfig) {
 	}
 	if cfg.Protocol == "" {
 		cfg.Protocol = "webhook"
+	}
+	// 监听地址。没显式配置时按协议定默认值: websocket 模式平台不回调进来, 这个 HTTP 端口只剩
+	// 管理台, 所以默认只绑回环 —— 公网机器上不该被外面扫到; webhook 模式平台必须能回调进来,
+	// 只能绑全网卡。这段必须写在 protocol 默认值之后, 否则会按"还没填"的空串走错分支。
+	if cfg.ListenAddr == "" {
+		if cfg.Protocol == "websocket" {
+			cfg.ListenAddr = "127.0.0.1"
+		} else {
+			cfg.ListenAddr = "0.0.0.0"
+		}
 	}
 	cfg.GatewayURL = strings.TrimSpace(cfg.GatewayURL)
 	if cfg.UploadThreshold == 0 {
@@ -215,6 +227,18 @@ func applyCoreKey(cfg *AppConfig, key string, rawValue json.RawMessage) error {
 			return errors.New("port 不能为 0")
 		}
 		cfg.Port = v
+	case "listen_addr":
+		var v string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("listen_addr: %w", err)
+		}
+		v = strings.TrimSpace(v)
+		// 只收裸 IP: 写成 "0.0.0.0:4514" 这种带端口的会被 JoinHostPort 拼成 "0.0.0.0:4514:4514",
+		// 报错比让人对着一个起不来的端口猜要好。
+		if v != "" && net.ParseIP(v) == nil {
+			return fmt.Errorf("listen_addr 必须是 IP 地址(不带端口): %s", v)
+		}
+		cfg.ListenAddr = v
 	case "appid":
 		var v string
 		if err := json.Unmarshal(rawValue, &v); err != nil {

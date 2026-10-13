@@ -10,6 +10,7 @@
 	Aliases:  []string{"打招呼"},     // 别名, 中文亦可
 	Role:     constant.RoleMember,  // 最低权限
 	DisablePrivate: false,          // 禁止私聊
+	NoFooter: false,                // 为 true 时这条指令的回复不带底部按钮
 	Describe: "打招呼",
 	Handle:   hello,                // func(*context.MessageContext) error
 }
@@ -21,6 +22,7 @@
 | `Aliases` | 别名，与按钮规范化共用 |
 | `Role` | 最低权限，见[权限角色](#权限角色) |
 | `DisablePrivate` | 为 true 时禁止私聊触发 |
+| `NoFooter` | 为 true 时这条指令（及其子指令）的回复不追加框架级底部按钮；只想让单条消息不带就写 `ctx.Msg().NoFooter()` |
 | `Describe` | 指令描述（管理台 / 用法文案） |
 | `Handle` | 处理函数 `func(*context.MessageContext) error` |
 | `PermissionDenied` | 权限不足时的处理，默认回复"无权限" |
