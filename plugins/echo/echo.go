@@ -16,7 +16,6 @@ func init() {
 	commands = append(commands, &plugin.Command{
 		Prefix:   "echo",
 		Role:     constant.RoleMember,
-		NoFooter: true,
 		Describe: "回声洞",
 		Handle:   echoHandlefunc,
 	})
