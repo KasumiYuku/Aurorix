@@ -24,7 +24,10 @@ type MessageEvent struct {
 	MsgType     int
 	Ark         *structers.ArkData
 	Elements    []structers.MsgElement
-	Raw         json.RawMessage
+	// Searchable 是这条消息里所有可能有链接的文本(正文 / 卡片 / 各消息元素), 已去重,
+	// 且每个来源都附了一份反转义后的副本 —— 直接拿去跑正则就行, 不必关心它原本放在哪。
+	Searchable []string
+	Raw        json.RawMessage
 }
 
 func (e *MessageEvent) Type() constant.EventType { return e.eventType }

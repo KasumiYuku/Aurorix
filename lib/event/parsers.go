@@ -19,7 +19,7 @@ func parseMessageEvent(origin constant.MessageOrigin) Parser {
 		} else {
 			content = strings.TrimSpace(content)
 		}
-		return &MessageEvent{
+		ev := &MessageEvent{
 			eventType:   p.EventType,
 			EventID:     p.ID,
 			MessageID:   d.Id,
@@ -36,6 +36,9 @@ func parseMessageEvent(origin constant.MessageOrigin) Parser {
 			Elements:    d.MsgElements,
 			Raw:         p.RawEvent,
 		}
+		// 可搜文本在这里算一次: 下游(链接解析这类)不必再去猜分享内容放在哪个字段里。
+		ev.Searchable = structers.Searchable(content, d.ArkData, d.MsgElements)
+		return ev
 	}
 }
 

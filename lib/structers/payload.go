@@ -112,22 +112,38 @@ type PrasedData struct {
 }
 
 // ArkData 结构化卡片数据 —— App 分享到 QQ 时平台已经解析好的那部分, 框架原样透传。
+//
+// 卡片没有统一形状: 老式 ark 给 ark_type/fields, 小程序卡片给
+// {"app":"com.tencent.miniapp_01","meta":{"detail_1":{"qqdocurl":"…"}}} —— 字段名和层级都不一样。
+// 所以这里只钉住"平台一定会给的那几个"(prompt 和原文本体), 其余交给 URLs / Fields 按需取。
 type ArkData struct {
-	Prompt    string         `json:"prompt"`
-	ArkType   string         `json:"ark_type"`
-	ArkName   string         `json:"ark_name"`
-	Fields    map[string]any `json:"fields"`
-	fieldsRaw []byte
+	Prompt  string         `json:"prompt"`
+	ArkType string         `json:"ark_type"`
+	ArkName string         `json:"ark_name"`
+	Fields  map[string]any `json:"fields"`
+	// Raw 是卡片的原始 JSON: 形状不认识时, 链接仍能从它里面扫出来。
+	Raw json.RawMessage `json:"-"`
 }
 
 // URLs 按平台下发顺序返回卡片里的 http(s) 链接, 已去重。
+//
+// 扫的是整份原文而不只是 fields —— 小程序卡片把链接放在 meta.detail_1.qqdocurl,
+// 只看 fields 就一个都拿不到。
 func (a *ArkData) URLs() []string {
-	if a == nil || len(a.fieldsRaw) == 0 {
+	if a == nil {
 		return nil
 	}
+	source := a.Raw
+	if len(source) == 0 {
+		source = a.fieldsRaw()
+	}
+	if len(source) == 0 {
+		return nil
+	}
+
 	out := make([]string, 0, 4)
 	seen := make(map[string]bool, 4)
-	dec := json.NewDecoder(bytes.NewReader(a.fieldsRaw))
+	dec := json.NewDecoder(bytes.NewReader(source))
 	for {
 		tok, err := dec.Token()
 		if err != nil {
@@ -143,8 +159,23 @@ func (a *ArkData) URLs() []string {
 	return out
 }
 
-// UnmarshalJSON 宽松解码: 卡片结构和预期对不上时留空而不是报错。
+// fieldsRaw 在没有原文时(测试里手工构造的 ArkData)退回 fields 自己编码一份。
+func (a *ArkData) fieldsRaw() []byte {
+	if len(a.Fields) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(a.Fields)
+	if err != nil {
+		return nil
+	}
+	return raw
+}
+
+// UnmarshalJSON 宽松解码: 卡片结构不认识也留原文、不报错 —— 分享卡片的花样太多,
+// 报错会让整条消息的事件解析直接失败。
 func (a *ArkData) UnmarshalJSON(data []byte) error {
+	a.Raw = append(a.Raw[:0], data...)
+
 	var probe struct {
 		Prompt  string          `json:"prompt"`
 		ArkType string          `json:"ark_type"`
@@ -155,7 +186,6 @@ func (a *ArkData) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	a.Prompt, a.ArkType, a.ArkName = probe.Prompt, probe.ArkType, probe.ArkName
-	a.fieldsRaw = probe.Fields
 	fields := map[string]any{}
 	if err := json.Unmarshal(probe.Fields, &fields); err == nil {
 		a.Fields = fields
