@@ -205,15 +205,18 @@ func (b *MsgBuilder) plan() []Sender {
 		case *message.ImageMessage:
 			if useMarkdown {
 				r := imgSlots[next]
-				next++
 				if r.err == nil && r.frag != "" {
-					inline.WriteByte('\n')
+					// 原样拼进去, 不替用户决定换不换行。
+					//
+					// 图片片段在 markdown 里就是一段内联内容(<img …>), 它跟前后文字本来
+					// 就能同行。以前这里前后各塞一个换行, 结果是"图后面写的话永远掉到下一行";
+					// 想让图和字同行, 只能不写文字 —— 而那是流程的问题, 不该由框架决定。
+					// 要独占一行的, 自己在片段里写换行。
 					inline.WriteString(strings.TrimRight(r.frag, "\n"))
-					inline.WriteString("\n\n")
+					next++
 					continue
 				}
-				v.ForceMarkdown = false
-				v.ForceMedia = true
+				next++
 			}
 			media = append(media, v)
 		case *message.UploadMessage:
