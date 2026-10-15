@@ -2,8 +2,8 @@ package message
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/KasumiYuku/Aurorix/lib/api"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
@@ -54,10 +54,7 @@ func (msg *Message) QuoteTo(messageID string) {
 
 // 初始化回复计数器
 func (msg *Message) InitRef() *Message {
-	msg.MsgRef = &MsgRef{
-		msgSeq: 1,
-		lock:   sync.Mutex{},
-	}
+	msg.MsgRef = &MsgRef{}
 	//降级默认开：消息的**唯一出口**就在这里，而"被动窗口过期"是长任务的常态
 	//（见 SendWithID 的说明）。默认关等于每个调用方都要记得手动打开一次，
 	// 而漏掉的那个必然是最慢、最需要它的那条路径。
@@ -134,7 +131,7 @@ func (msg *Message) Send() error {
 // （全框架的群/私聊分派就在下面那个 switch 里）。在这里加工一次，
 // arcaea / phigros / 以后任何插件都自动获得这个能力，一行都不用改。
 //
-// 只有"被动窗口失效"这一类错误会触发降级（判据见 errorx.IsPassiveExpired）；
+// 只有"被动这条路走不通"才触发降级（判据见 passiveGone）：窗口过期，或本地把 5 条预算用光；
 // 内容违规、参数错误这些换通道也发不出去，重发只是把一条注定失败的请求再打一遍。
 func (msg *Message) SendWithID() (string, error) {
 	if msg.used {
@@ -146,7 +143,7 @@ func (msg *Message) SendWithID() (string, error) {
 	if err == nil {
 		return id, nil
 	}
-	if !errorx.IsPassiveExpired(err) || !msg.activeFallback {
+	if !passiveGone(err) || !msg.activeFallback {
 		return "", err
 	}
 	//走到这里说明"这条消息发得出去，只是不能再回复那条了" —— 改走主动通道。
@@ -172,13 +169,33 @@ func (msg *Message) SendWithID() (string, error) {
 	}
 }
 
+// passiveGone 被动回复这条路还能不能走。
+//
+// 两种情形同一处置(换主动通道重发): 上游说窗口过期(见 errorx.IsPassiveExpired), 或本地已经把这条
+// 锚点的 5 条预算用光 —— 后者是本地的账, 从前它只会报一个普通错误, 于是降级不触发、消息被丢掉。
+func passiveGone(err error) bool {
+	var limit *ReplyMessageReachLimit
+	return errorx.IsPassiveExpired(err) || errors.As(err, &limit)
+}
+
 // sendOnce 执行一次投递；initiative 为真时走主动通道。
+//
+// 预算用光时不再去打那个注定被拒的请求, 直接报出来交给 SendWithID 换通道。
+//
+// 主动那条路**不占被动序号**(上游也不认它), 所以预算用光之后主动照样发得出去 —— 从前这里顺序不对,
+// 先取序号再判主动, 于是"预算用光"会把主动重发也一起拒掉。
 func (msg *Message) sendOnce(initiative bool) (string, error) {
-	seq, err := msg.Count()
-	if err != nil {
-		return "", err
+	var err error
+	if !initiative && !msg.initiativePush {
+		if msg.MsgRef != nil && msg.MsgRef.Spent() {
+			return "", &ReplyMessageReachLimit{}
+		}
+		var seq uint8
+		if seq, err = msg.Count(); err != nil {
+			return "", err
+		}
+		msg.MsgSeq = seq
 	}
-	msg.MsgSeq = seq
 	if initiative || msg.initiativePush {
 		msg.EventId = ""
 		msg.MsgId = ""
