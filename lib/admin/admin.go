@@ -70,6 +70,7 @@ func Register(mux *http.ServeMux, deps Deps) {
 	if deps.Assets != nil {
 		registerAssetsRoutes(api, deps.Assets)
 	}
+	registerMenuRoutes(api, deps)
 	api.HandleFunc("GET /admin/api/jobs", handleJobs)
 	api.HandleFunc("POST /admin/api/jobs/{id}/pause", handleJobPause)
 	api.HandleFunc("GET /admin/api/config", handleGetConfig)

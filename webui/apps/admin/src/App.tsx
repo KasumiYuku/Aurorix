@@ -11,6 +11,7 @@ import AssetsPage from './features/assets'
 import JobsPage from './features/jobs'
 import LoginPage from './features/login'
 import LogsPage from './features/logs'
+import MenuPage from './features/menu'
 import OverviewPage from './features/overview'
 import PluginsPage from './features/plugins'
 import SettingsPage from './features/settings'
@@ -65,6 +66,7 @@ export default function App() {
           <Route index element={<Navigate to="/overview" replace />} />
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route path="/menu" element={<MenuPage />} />
           <Route path="/plugins" element={<PluginsPage />} />
           <Route path="/assets" element={<AssetsPage />} />
           <Route path="/jobs" element={<JobsPage />} />

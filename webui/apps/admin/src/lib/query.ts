@@ -21,4 +21,7 @@ export const qk = {
   assets: ['assets'] as const,
   jobs: ['jobs'] as const,
   config: ['config'] as const,
+  menu: ['menu', 'panels'] as const,
+  menuMeta: ['menu', 'meta'] as const,
+  menuSnapshots: ['menu', 'snapshots'] as const,
 }

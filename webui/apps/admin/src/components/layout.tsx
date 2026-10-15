@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Button, ThemeSwitch, cn } from '@aurorix/webui'
 import {
   Clock,
+  Command,
   ExternalLink,
   Image as ImageIcon,
   LayoutGrid,
@@ -25,6 +26,7 @@ export type OverviewData = Overview & { now?: number }
 const NAV = [
   { to: '/overview', label: '概览', icon: LayoutGrid },
   { to: '/logs', label: '日志', icon: ScrollText },
+  { to: '/menu', label: '指令面板', icon: Command },
   { to: '/plugins', label: '插件', icon: Package },
   { to: '/assets', label: '图床', icon: ImageIcon },
   { to: '/jobs', label: '定时任务', icon: Clock },

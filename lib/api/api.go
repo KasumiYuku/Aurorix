@@ -37,6 +37,7 @@ type BotAPI struct {
 	Files   *FilesAPI
 	Gateway *GatewayAPI
 	Me      *MeAPI
+	Panel   *PanelAPI
 }
 
 // Init 构造门面; 各域实例持有同一凭证存储。
@@ -53,6 +54,7 @@ func Init(appID, appSecret, proxy string, req *requests.Client) *BotAPI {
 	bot.Files = &FilesAPI{api: bot}
 	bot.Gateway = &GatewayAPI{api: bot}
 	bot.Me = &MeAPI{api: bot}
+	bot.Panel = &PanelAPI{api: bot}
 	return bot
 }
 

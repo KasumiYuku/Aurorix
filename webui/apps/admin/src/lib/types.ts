@@ -231,3 +231,97 @@ export interface NoticeResult {
 export interface ProfileView {
   profile: BotProfile | null
 }
+
+/** 指令面板: 用户在输入框旁看到的命令菜单, 存在 QQ 服务端。 */
+export type PanelScope = 'group' | 'c2c' | 'channel' | 'dm'
+
+export type PanelItemType = 'command' | 'link'
+
+export interface PanelItem {
+  name: string
+  desc: string
+  type: PanelItemType
+  only_admin?: boolean
+  link?: string
+}
+
+export interface Panel {
+  items: PanelItem[]
+  remark?: string
+  version?: number
+}
+
+export interface PanelRecord {
+  panel_id: string
+  scope: PanelScope
+  target_type: string
+  panel: Panel
+  created_at?: string
+  updated_at?: string
+  version: number
+}
+
+export interface MenuScopeInfo {
+  scope: PanelScope
+  label: string
+}
+
+/** 上限由后端下发, 前端不硬编码: 改口径时两边不会漂。 */
+export interface MenuLimits {
+  name_width: number
+  desc_width: number
+  remark_len: number
+  max_items: number
+  max_per_bot: number
+  item_types: PanelItemType[]
+  target_type: string
+  display_note: string
+}
+
+export interface MenuMeta {
+  scopes: MenuScopeInfo[]
+  limits: MenuLimits
+}
+
+export interface MenuScopePanels extends MenuScopeInfo {
+  panels: PanelRecord[]
+}
+
+export interface MenuPanels {
+  scopes: MenuScopePanels[]
+  total: number
+  max_per_bot: number
+}
+
+export interface MenuSnapshot {
+  file: string
+  panel_id: string
+  scope: PanelScope
+  target_type: string
+  panel: Panel
+  version: number
+  action: string
+  saved_at: string
+}
+
+export interface MenuSnapshots {
+  snapshots: MenuSnapshot[]
+  dir: string
+}
+
+export interface PanelWriteResult {
+  ok: boolean
+  version?: number
+  panel_id?: string
+  /** 改动前自动留的快照文件名; 留档失败时改带 snapshot_error。 */
+  snapshot?: string
+  snapshot_error?: string
+}
+
+export interface PanelRestoreResult {
+  ok: boolean
+  panel_id: string
+  scope: PanelScope
+  /** overwrite = 原面板还在, 原地覆盖; recreated = 面板已被删, 重建并拿到新 id。 */
+  mode: 'overwrite' | 'recreated'
+}
