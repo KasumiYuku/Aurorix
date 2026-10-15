@@ -164,13 +164,15 @@ type Sender interface {
 	Recall(m *context.MessageManager, messageID string) error
 }
 
-// Buttons 是三枚按钮的文案; 空则用默认值。Prefix 是那条指令的写法(如 "/p guess")。
+// Buttons 是三枚按钮的文案; 空则用默认值。Prefix 是那条指令的写法(如 "/p guess"),
+// HintWord 是"查看提示"填进输入框的那个词 —— 与插件认的提示别名同一个词。
 type Buttons struct {
-	Prefix  string
-	Command string
-	Guess   string
-	Hint    string
-	Stop    string
+	Prefix   string
+	Command  string
+	Guess    string
+	Hint     string
+	HintWord string
+	Stop     string
 }
 
 // Deps 是装配输入。
@@ -206,20 +208,22 @@ type Quiz struct {
 
 type session struct {
 	key     string
-	manager *context.MessageManager
+	anchor  *context.MessageManager
 	answer  Answer
 	variant string
 	seed    int64
 	stage   int
-	message string
-	hinted  int
-	tier    int
-	hintAt  time.Time
-	used    []Hint
-	started time.Time
-	done    bool
-	stop    chan struct{}
-	once    sync.Once
+	// stageMsg / hintMsg 是这一局占的两条消息(谜面一条、提示一条): 各自撤旧发新, 互不顶掉。
+	stageMsg string
+	hintMsg  string
+	hinted   int
+	tier     int
+	hintAt   time.Time
+	used     []Hint
+	started  time.Time
+	done     bool
+	stop     chan struct{}
+	once     sync.Once
 }
 
 // New 装配; Source 与 Views 缺一不可。
@@ -254,10 +258,10 @@ func New(d Deps) *Quiz {
 // Playing 报告这个会话有没有一局在跑。
 func (q *Quiz) Playing(group, user string) bool { return q.lookup(key(group, user)) != nil }
 
-// HintButton 给出"查看提示"那枚按钮的 id 与回调 data —— 插件拿它注册回调。
-func (q *Quiz) HintButton() (id, data string) { return q.id + ".hint", hintData }
-
-// Keyboard 造线索卡底下那三枚: 两条快捷输入 + 一条回调。
+// Keyboard 造线索卡底下那三枚: **三枚都是"填进输入框"的快捷输入**。
+//
+// 提示也走文字而不是回调: 回调不是一条新的入站消息, 而换锚点、@ 人、撤回全都建立在
+// "这是一次普通互动"上(见 touch)。
 func (q *Quiz) Keyboard() *buttons.Keyboard {
 	prefix := q.buttons.Prefix
 	if prefix == "" {
@@ -265,7 +269,7 @@ func (q *Quiz) Keyboard() *buttons.Keyboard {
 	}
 	return buttons.New().Scope(q.id).
 		Command("try", pick(q.buttons.Guess, "点击猜测"), "已填入", prefix+" ").
-		Callback("hint", pick(q.buttons.Hint, "查看提示"), "已看提示", hintData).
+		Command("hint", pick(q.buttons.Hint, "查看提示"), "已填入", prefix+" "+pick(q.buttons.HintWord, "提示")).
 		Command("stop", pick(q.buttons.Stop, "停止游戏"), "已填入", prefix+" stop").
 		Build()
 }
@@ -278,7 +282,7 @@ func (q *Quiz) Start(m *context.MessageManager) error {
 	}
 	s := &session{
 		key:     key(m.GroupId, m.UserId),
-		manager: m,
+		anchor:  m,
 		answer:  round.Answer,
 		variant: round.Variant,
 		seed:    q.clock().UnixNano(),
@@ -304,6 +308,7 @@ func (q *Quiz) Guess(m *context.MessageManager, query string) error {
 	if s == nil {
 		return ErrNoRound
 	}
+	q.touch(s, m)
 	hit, notice := q.source.Judge(query, s.answer)
 	if hit {
 		q.finish(s)
@@ -320,45 +325,54 @@ func (q *Quiz) Guess(m *context.MessageManager, query string) error {
 func (q *Quiz) Stop(m *context.MessageManager) error {
 	s := q.lookup(key(m.GroupId, m.UserId))
 	if s == nil {
-		return q.notice(m, "这个会话没有正在进行的对局。")
+		return q.notice(m, "这个会话没有正在进行的对局")
 	}
+	q.touch(s, m)
 	q.finish(s)
-	q.reveal(s, m, "这一局结束了", "有人喊停了这一局。")
+	q.reveal(s, m, "这一局结束了", "有人喊停了这一局")
 	return nil
 }
 
 // Hint 揭一条提示: 次数与冷却都是全桌共用的, 谁点的都算。
+//
+// 提示卡是**累计**的: 每次重发都带上这一局揭过的全部提示(插件把它排进代码框), 后一条不会把
+// 前一条冲掉。
 func (q *Quiz) Hint(m *context.MessageManager) error {
 	s := q.lookup(key(m.GroupId, m.UserId))
 	if s == nil {
-		return q.notice(m, "这一局已经结束了。")
+		return q.notice(m, "这一局已经结束了")
 	}
+	q.touch(s, m)
 	now := q.clock()
 	q.mu.Lock()
 	switch {
 	case s.hinted >= q.rules.HintLimit:
 		q.mu.Unlock()
-		return q.notice(m, "这一局的提示已经用完了。")
+		return q.notice(m, "这一局的提示已经用完了")
 	case now.Sub(s.hintAt) < q.rules.HintCooldown:
 		wait := q.rules.HintCooldown - now.Sub(s.hintAt)
 		q.mu.Unlock()
-		return q.notice(m, "刚给过提示，"+round(wait)+"之后再来。")
+		return q.notice(m, "刚给过提示，"+round(wait)+"之后再来")
 	}
 	hint, ok := nextHint(q.source.Hints(s.answer), &s.tier)
 	if !ok {
 		q.mu.Unlock()
-		return q.notice(m, "这一局没有更多提示可给了。")
+		return q.notice(m, "这一局没有更多提示可给了")
 	}
 	s.hinted++
 	s.hintAt = now
 	s.used = append(s.used, hint)
 	stage := s.stage
 	left := q.rules.HintLimit - s.hinted
+	used := append([]Hint(nil), s.used...)
 	q.mu.Unlock()
 
 	task := q.task(s, stage, false)
-	view := Caption{Kind: KindHint, Task: task, Percent: percent(task.Level), Hint: hint, Left: left}
-	return q.send(s, task, view, m.UserId, false)
+	view := Caption{
+		Kind: KindHint, Task: task, Percent: percent(task.Level),
+		Hint: hint, Left: left, Used: used,
+	}
+	return q.send(s, task, view, m.UserId, &s.hintMsg)
 }
 
 // run 是一局的节拍: 到点放下一层线索, 到点收局。
@@ -373,7 +387,7 @@ func (q *Quiz) run(s *session) {
 		return
 	}
 	q.finish(s)
-	q.reveal(s, s.manager, "时间到", "")
+	q.reveal(s, s.anchor, "时间到", "")
 }
 
 // advance 放下一层线索(撤掉上一条)。
@@ -388,17 +402,17 @@ func (q *Quiz) advance(s *session) {
 	q.mu.Unlock()
 
 	if !q.submit(func() {
-		q.send(s, task, Caption{Kind: KindStage, Task: task, Percent: percent(task.Level)}, "", true)
+		q.send(s, task, Caption{Kind: KindStage, Task: task, Percent: percent(task.Level)}, "", &s.stageMsg)
 	}) {
 		logger.Warnf("第 %d 层没排上出图队列, 这一层跳过", task.Stage)
 	}
 }
 
-// reveal 收局: 撤掉场上的线索卡, 摆出答案。
+// reveal 收局: 用揭晓卡顶掉场上的那一层(提示卡留着, 那是这一局的账)。
 func (q *Quiz) reveal(s *session, m *context.MessageManager, head, reason string) {
 	task := q.task(s, len(q.rules.Stages), true)
 	view := q.over(s, task, head, reason)
-	if !q.submit(func() { q.send(s, task, view, "", true) }) {
+	if !q.submit(func() { q.send(s, task, view, "", &s.stageMsg) }) {
 		logger.Warnf("收局没排上出图队列, 改用文字")
 		if err := q.notice(m, head); err != nil {
 			logger.Warnf("收局回复失败: %v", err)
@@ -406,13 +420,27 @@ func (q *Quiz) reveal(s *session, m *context.MessageManager, head, reason string
 	}
 }
 
-// send 渲染并发出这一张卡。
-func (q *Quiz) send(s *session, task Task, view Caption, mention string, recallOld bool) error {
+// touch 把这一局的消息锚点换成刚刚那条入站消息。
+//
+// QQ 对**一条**入站消息只收 5 条被动回复, 而一局要发五层 + 提示 + 揭晓, 每张卡还是两条平台消息
+// (正文 + 媒体)。一直挂在开局那条上, 第 3 张卡就顶到上限, 后面全发不出去 —— 每次互动换一次锚点,
+// 预算就变成"每条消息各 5 条"; 真用光了还有框架的主动降级兜底(见 lib/message 的三级投递)。
+func (q *Quiz) touch(s *session, m *context.MessageManager) {
 	q.mu.Lock()
-	prev := s.message
+	s.anchor = m
 	q.mu.Unlock()
-	if recallOld && prev != "" {
-		if err := q.sender.Recall(s.manager, prev); err != nil {
+}
+
+// send 渲染并发出这一张卡; slot 是这张卡占的那条消息(撤旧发新都按它, nil 表示不占位)。
+func (q *Quiz) send(s *session, task Task, view Caption, mention string, slot *string) error {
+	q.mu.Lock()
+	anchor, prev := s.anchor, ""
+	if slot != nil {
+		prev = *slot
+	}
+	q.mu.Unlock()
+	if slot != nil && prev != "" {
+		if err := q.sender.Recall(anchor, prev); err != nil {
 			logger.Warnf("撤回上一条线索失败(不影响这一局): %v", err)
 		}
 	}
@@ -426,14 +454,16 @@ func (q *Quiz) send(s *session, task Task, view Caption, mention string, recallO
 		Image: img, TemplateID: tplID, Args: args, Keyboard: q.Keyboard(),
 		NoFooter: true, Mention: mention,
 	}
-	id, err := q.sender.Post(s.manager, out)
+	id, err := q.sender.Post(anchor, out)
 	if err != nil {
 		logger.Warnf("第 %d 层发送失败: %v", task.Stage, err)
 		return err
 	}
-	q.mu.Lock()
-	s.message = id
-	q.mu.Unlock()
+	if slot != nil {
+		q.mu.Lock()
+		*slot = id
+		q.mu.Unlock()
+	}
 	return nil
 }
 
@@ -551,7 +581,5 @@ func clamp(v, lo, hi int) int {
 	return v
 }
 
-const (
-	seedPattern = 0x9E3779B97F4A7C15
-	hintData    = "hint"
-)
+// seedPattern 把时钟与随机流分开: 同一秒开两局也不会抽到同一道题。
+const seedPattern = 0x9E3779B97F4A7C15
