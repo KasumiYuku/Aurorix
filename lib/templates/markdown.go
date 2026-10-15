@@ -54,10 +54,16 @@ var (
 	regMu   sync.Mutex
 	regMap  = make(map[string]map[templateKey]*MarkdownTemplate)
 	regSnap atomic.Value
+	baseMap = make(map[baseKey]string)
 )
 
 // templateKey 注册表键: 同一命名空间下 markdown 与 html 可以有同名模板。
 type templateKey struct {
+	kind kind
+	id   string
+}
+type baseKey struct {
+	ns   string
 	kind kind
 	id   string
 }
@@ -75,6 +81,13 @@ func publish() {
 }
 
 func register(k kind, ns, id, content string) {
+	regMu.Lock()
+	baseMap[baseKey{ns: ns, kind: k, id: id}] = content
+	regMu.Unlock()
+	put(k, ns, id, content)
+}
+
+func put(k kind, ns, id, content string) {
 	template, args := processTemplate(content)
 	key := templateKey{kind: k, id: id}
 	regMu.Lock()
@@ -89,6 +102,25 @@ func register(k kind, ns, id, content string) {
 	m[key] = &MarkdownTemplate{Id: id, Template: template, args: args, kind: k}
 	publish()
 	regMu.Unlock()
+}
+
+func drop(k kind, ns, id string) {
+	key := templateKey{kind: k, id: id}
+	regMu.Lock()
+	if m := regMap[ns]; m != nil {
+		if _, ok := m[key]; ok {
+			delete(m, key)
+			publish()
+		}
+	}
+	regMu.Unlock()
+}
+
+func baseOf(key baseKey) (string, bool) {
+	regMu.Lock()
+	defer regMu.Unlock()
+	content, ok := baseMap[key]
+	return content, ok
 }
 
 // RegisterFS 把 FS 内 dir 子树下的 *.md 注册到命名空间。

@@ -134,7 +134,7 @@ func cmd(ctx *context.MessageContext) error {
 
 模板填充失败返回 error；确定模板与参数匹配、想少写错误分支时可用 `ctx.UnsafeMarkdownTemplate`（失败直接 panic）：
 
-模板的解析规则：插件命名空间优先，未命中回落全局命名空间（框架内置模板如 `Card`）。`templates/markdown` 内可放任意多个 `.md`，文件名即模板 ID。`{{inline "显示文字" "命令"}}` 可生成 QQ 蓝色点击指令链接。更多规则见 [message.md](message.md#markdown-模板)。
+模板的解析规则：插件命名空间优先，未命中回落全局命名空间（框架内置模板如 `Card`）。`templates/markdown` 内可放任意多个 `.md`，文件名即模板 ID。`{{inline "显示文字" "命令"}}` 会生成 QQ 官方的点击填充指令标签。更多规则见 [message.md](message.md#markdown-模板)。
 
 ### 给插件加一个 HTML 模板
 
@@ -163,7 +163,7 @@ page, err := templates.FillHTMLFor("hello", "Verify", templates.Args{
 两处和 markdown 不同，要留意：
 
 - **不自动转义**：引擎按原样插入值。值来自用户输入（群名、昵称、邮箱之类）而结果要进浏览器时，用 `templates.EscapeHTML` 包一层，否则对方能把标签写进页面。
-- **`{{inline}}` 是 markdown 专用标签**，HTML 模板里别用，它只会渲染出一个 markdown 链接。
+- **`{{inline}}` 是 markdown 专用标签**，HTML 模板里别用，它渲染出的是 QQ 的 markdown 标签，在网页里只是一段裸文本。
 
 编辑 `plugins/hello/hello.go` 写你的逻辑，然后：
 

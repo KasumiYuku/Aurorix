@@ -67,7 +67,7 @@ git tag v0.1.0 && git push --tags
 - 指令名小写英文为主，中文别名放 `Aliases`
 - 对外请求走 `ctx.Request`，勿自建裸 `http.Client`
 - 带 Markdown 模板的插件：模板放包内 `templates/markdown/` 并挂 `TemplateFS`，**确认模板 `.md` 已进 git**（仓库 `.gitignore` 若忽略 `*.md` 需显式放行，否则拉取者编译因缺 embed 文件失败）
-- 模板需要点击填充输入框时，优先用 `{{inline "显示文字" "命令"}}` 或 `{{inline label command}}`，不要在每个模板里手写整段 `mqqapi://aio/inlinecmd?...`
+- 模板需要点击填充输入框时，优先用 `{{inline "显示文字" "命令"}}` 或 `{{inline label command}}`，不要在每个模板里手写整段 `<qqbot-cmd-input .../>`
 
 ## 版本与发布
 

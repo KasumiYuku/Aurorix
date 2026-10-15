@@ -203,9 +203,9 @@ templates.Args{
 
 `{{#each}}` 目前不支持嵌套 each；缺参数、类型不符、渲染后仍残留占位符时都会返回 error。
 
-### QQ 点击指令链接
+### QQ 点击指令
 
-QQ Markdown 支持一种蓝色文字链接：点击后把命令填进输入框。模板里不用手写完整 `mqqapi://aio/inlinecmd?...`，直接用 `inline`：
+QQ Markdown 支持点击后把指令填进输入框。模板里不用手写官方标签，直接用 `inline`：
 
 ```markdown
 {{inline "点击领取猫娘" "嘿嘿"}}
@@ -228,12 +228,14 @@ templates.Args{
 渲染结果形如：
 
 ```markdown
-[点击领取猫娘](mqqapi://aio/inlinecmd?command=%E5%98%BF%E5%98%BF&reply=false&enter=true)
+<qqbot-cmd-input text="%E5%98%BF%E5%98%BF" show="%E7%82%B9%E5%87%BB%E9%A2%86%E5%8F%96%E7%8C%AB%E5%A8%98" />
 ```
 
-- 直接写死内容时用引号，支持中文、空格与特殊符号
-- 参数引用不加引号，如 `action.command`
-- `command` 会自动 URL escape，`label` 会转义 Markdown 链接文本里的 `[` / `]`
+- 第一个操作数是显示文字（官方 `show`），第二个是点击后填进输入框的指令（官方 `text`）；两者相等时 `show` 整个省略
+- 第三个操作数可选，为真（`true` / `1` / `yes`）时补 `reference="true"`，用于引用回复
+- 直接写死内容时用引号，支持中文、空格与特殊符号；参数引用不加引号，如 `action.command`
+- 两个操作数都会 URL 编码，所以渲染正文里看不到裸指令（`/help` 会变成 `%2Fhelp`）
+- 单个操作数超过官方 100 字符上限时只告警、照常输出，不会让整页渲染失败
 - `{{#each}}` 段内也能使用 `{{inline label command}}`
 
 ### 命名空间解析
@@ -241,10 +243,23 @@ templates.Args{
 - 插件 `TemplateFS` 下的模板注册到**插件命名空间**（插件 ID），`ctx.MarkdownTemplate` 优先查插件命名空间，未命中回落**全局命名空间**（框架内置模板）
 - 无插件上下文（定时任务/框架内部）直接查全局命名空间
 - 同名模板在不同插件间互不干扰；框架内置模板（如 `Card`）由全局命名空间提供
-- 模板增删改后重新编译生效，无运行时文件依赖
+- 模板增删改后重新编译生效；不改二进制也能覆盖模板，见下方「模板覆盖层」
 
 > **注意**：插件模板目录是 embed 资源，发布插件时必须进 git。若仓库 `.gitignore` 全局忽略了 `*.md`，请显式放行 `templates/markdown/*.md`，否则拉取者编译会因缺文件失败。
 
+### 模板覆盖层
+
+磁盘上的 `templates/override/` 可以覆盖任意已注册模板，不用改代码、不用重启：
+
+```
+templates/override/<插件 ID>/<模板 ID>.md     # 插件命名空间
+templates/override/_global/<模板 ID>.md       # 全局命名空间
+```
+
+- 目录不存在 = 零行为变化，内嵌模板照常生效
+- 写入后最多 3 秒生效（`templates.reload_seconds` 可调），删除文件即回滚到内嵌版；内嵌版没有的 ID 会直接下线
+- 覆盖的是**内容**，命名空间优先级与模板 ID 规则不变；文件名即模板 ID，后缀 `.md` / `.html` 决定格式
+- 只认 `<命名空间>/<文件名>` 两级，多一层或深一层都不生效
 ## 消息撤回
 
 机器人撤回自己发过的消息（群/私聊通用）：

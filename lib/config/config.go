@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"github.com/KasumiYuku/Aurorix/lib/utils"
 	"net"
 	"os"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 var configLock sync.Mutex
@@ -38,6 +40,7 @@ type AppConfig struct {
 	PProfAddr            string                    `json:"pprof_addr,omitempty"`
 	PluginSettings       map[string]map[string]any `json:"plugin_settings"`
 	PluginAccess         map[string]AccessConfig   `json:"plugin_access"`
+	Templates            TemplatesConfig           `json:"templates,omitempty"`
 }
 
 type AccessRule struct {
@@ -50,6 +53,15 @@ type AccessConfig struct {
 	Default  AccessRule            `json:"default"`
 	Commands map[string]AccessRule `json:"commands,omitempty"`
 	Disabled bool                  `json:"disabled,omitempty"`
+}
+
+type TemplatesConfig struct {
+	OverrideDir   string `json:"override_dir,omitempty"`
+	ReloadSeconds int    `json:"reload_seconds,omitempty"`
+}
+
+func (t TemplatesConfig) Interval() time.Duration {
+	return time.Duration(t.ReloadSeconds) * time.Second
 }
 
 var current AppConfig
@@ -119,6 +131,12 @@ func normalize(cfg *AppConfig) {
 	}
 	if strings.HasPrefix(cfg.PProfAddr, ":") {
 		cfg.PProfAddr = "127.0.0.1" + cfg.PProfAddr
+	}
+	if cfg.Templates.OverrideDir == "" {
+		cfg.Templates.OverrideDir = templates.DefaultOverrideDir
+	}
+	if cfg.Templates.ReloadSeconds <= 0 {
+		cfg.Templates.ReloadSeconds = templates.DefaultReloadSeconds
 	}
 }
 

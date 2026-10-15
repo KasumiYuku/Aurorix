@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"unicode"
 )
@@ -16,7 +17,7 @@ import (
 // 参数写成 名字=值, 而不是按位置排: 卡片 2 有十一个参数, 靠顺序对应的话读模板的人
 // 根本看不出哪个是哪个, 想跳过中间某个还得数空位。
 // 值不带引号时从模板参数里取, 带引号就是写死的字面量 —— 与 {{inline}} 同一套写法。
-// 取到的值原样填进去, 不做 URL 编码: QQ 认的就是这种写法, 编了反而解不出来。
+// 值要 URL 编码: 值里的 & 会被当成参数分隔符, 空格和中文也得编, 不编参数就断了。
 const qqCardFunc = "qqcard"
 
 // qqCardParams 是每张卡片认得的参数名; 名字与 QQ 的字段一致, 便于对照文档。
@@ -58,11 +59,11 @@ func qqCardArgNames(tag string) []string {
 	if !ok {
 		return nil
 	}
-	_, rest, err := splitCardStyle(body)
+	_, rest, err := splitLeadingToken(body)
 	if err != nil {
 		return nil
 	}
-	args, err := parseCardArgs(rest)
+	args, err := parseNamedArgs(rest)
 	if err != nil {
 		return nil
 	}
@@ -81,9 +82,9 @@ func renderQQCard(tag string, flat map[string]string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("not a qqcard call: %s", tag)
 	}
-	style, rest, err := splitCardStyle(body)
+	style, rest, err := splitLeadingToken(body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("qqcard 要写款式, 例如: {{qqcard 2 text1=标题}}")
 	}
 	names, ok := qqCardParams[style]
 	if !ok {
@@ -94,9 +95,9 @@ func renderQQCard(tag string, flat map[string]string) (string, error) {
 		allowed[name] = true
 	}
 
-	args, err := parseCardArgs(rest)
+	args, err := parseNamedArgs(rest)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("qqcard: %w", err)
 	}
 
 	pairs := []string{"id=" + style}
@@ -116,16 +117,16 @@ func renderQQCard(tag string, flat map[string]string) (string, error) {
 		if strings.TrimSpace(value) == "" {
 			continue
 		}
-		pairs = append(pairs, a.Key+"="+value)
+		pairs = append(pairs, a.Key+"="+encodeValue(value))
 	}
 	return "<mqqapi://markdown/template?" + strings.Join(pairs, "&") + ">", nil
 }
 
-// splitCardStyle 取开头的款式(写死的数字), 返回款式和剩下的参数串。
-func splitCardStyle(body string) (string, string, error) {
+// splitLeadingToken 取开头那个位置参数, 返回它和剩下的参数串。
+func splitLeadingToken(body string) (string, string, error) {
 	body = strings.TrimLeftFunc(body, unicode.IsSpace)
 	if body == "" {
-		return "", "", fmt.Errorf("qqcard 要写款式: {{qqcard 2 text1=标题}}")
+		return "", "", fmt.Errorf("缺少开头的关键字")
 	}
 	at := strings.IndexFunc(body, unicode.IsSpace)
 	if at < 0 {
@@ -134,15 +135,15 @@ func splitCardStyle(body string) (string, string, error) {
 	return body[:at], body[at:], nil
 }
 
-type cardArg struct {
+type namedArg struct {
 	Key     string
 	value   string
 	literal bool
 }
 
-// parseCardArgs 解析 名字=值 序列。值不带引号时读到一个空白为止, 带引号可以含空格。
-func parseCardArgs(input string) ([]cardArg, error) {
-	out := make([]cardArg, 0, 4)
+// parseNamedArgs 解析 名字=值 序列。值不带引号时读到一个空白为止, 带引号可以含空格。
+func parseNamedArgs(input string) ([]namedArg, error) {
+	out := make([]namedArg, 0, 4)
 	for i := 0; ; {
 		for i < len(input) && isSpaceByte(input[i]) {
 			i++
@@ -155,22 +156,22 @@ func parseCardArgs(input string) ([]cardArg, error) {
 			i++
 		}
 		if i >= len(input) || input[i] != '=' {
-			return nil, fmt.Errorf("qqcard 的参数要写成 名字=值, 这里读不懂: %q", input[start:])
+			return nil, fmt.Errorf("参数要写成 名字=值, 这里读不懂: %q", input[start:])
 		}
 		key := input[start:i]
 		if key == "" {
-			return nil, fmt.Errorf("qqcard 有个参数没写名字")
+			return nil, fmt.Errorf("有个参数没写名字")
 		}
-		value, next, literal, err := readCardValue(input, i+1)
+		value, next, literal, err := readNamedValue(input, i+1)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, cardArg{Key: key, value: value, literal: literal})
+		out = append(out, namedArg{Key: key, value: value, literal: literal})
 		i = next
 	}
 }
 
-func readCardValue(input string, i int) (value string, next int, literal bool, err error) {
+func readNamedValue(input string, i int) (value string, next int, literal bool, err error) {
 	if i < len(input) && (input[i] == '"' || input[i] == '\'') {
 		quote := input[i]
 		var b strings.Builder
@@ -178,7 +179,7 @@ func readCardValue(input string, i int) (value string, next int, literal bool, e
 			b.WriteByte(input[i])
 		}
 		if i >= len(input) {
-			return "", 0, false, fmt.Errorf("qqcard 有个值的引号没闭合")
+			return "", 0, false, fmt.Errorf("有个值的引号没闭合")
 		}
 		return b.String(), i + 1, true, nil
 	}
@@ -207,3 +208,18 @@ func sortStrings(list []string) {
 	}
 }
 
+// encodeValue 幂等地做一次 URL 编码: 已经编码过的值再编一次结果不变。
+//
+// 幂等很重要 —— 模板可能被填两遍(插件模板回落全局、或调用方重复填),
+// 不幂等就会把 %20 变成 %2520。
+func encodeValue(value string) string {
+	if value == "" {
+		return value
+	}
+	decoded, err := url.QueryUnescape(value)
+	if err != nil {
+		decoded = value
+	}
+	// 空格编成 %20 而不是 +: QQ 的参数解析按 %20 处理更稳。
+	return strings.ReplaceAll(url.QueryEscape(decoded), "+", "%20")
+}

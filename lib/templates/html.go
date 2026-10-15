@@ -10,7 +10,7 @@ import (
 //
 // 唯一要留意的是转义: 引擎按原样插入值, 不会替你转义。值来自用户输入(群名、昵称、
 // 邮箱等)而结果要进浏览器时, 先过 EscapeHTML, 否则对方能把标签写进页面。
-// 另外 {{inline}} 是 markdown 专用标签, 在 HTML 模板里会渲染成 markdown 链接, 别用。
+// 另外 {{inline}} 是 markdown 专用标签, 在 HTML 模板里渲染出的是 QQ 的 markdown 标签, 别用。
 
 // RegisterHTMLFS 把 FS 内 dir 子树下的 *.html 注册到命名空间, 文件名即模板 ID。
 // 插件用 //go:embed 自带模板时, 在 init 里这样注册:

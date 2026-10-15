@@ -2,13 +2,15 @@ package templates
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
-const inlineCommandFunc = "inline"
+const (
+	inlineCommandFunc = "inline"
+	inlineTextLimit   = 100
+)
 
 type inlineOperand struct {
 	value   string
@@ -21,15 +23,18 @@ func isInlineCall(tag string) bool {
 }
 
 func inlineArgNames(tag string) []string {
-	label, command, err := parseInlineCall(tag)
+	call, err := parseInlineCall(tag)
 	if err != nil {
 		return nil
 	}
 	var names []string
-	for _, op := range []inlineOperand{label, command} {
+	for _, op := range []inlineOperand{call.label, call.command} {
 		if !op.literal {
 			names = append(names, op.value)
 		}
+	}
+	if call.hasReference && !call.reference.literal {
+		names = append(names, call.reference.value)
 	}
 	return names
 }
@@ -68,15 +73,15 @@ func processInlineCommands(template string, flat map[string]string) (string, err
 }
 
 func renderInlineCommand(tag string, flat map[string]string) (string, error) {
-	labelOp, commandOp, err := parseInlineCall(tag)
+	call, err := parseInlineCall(tag)
 	if err != nil {
 		return "", err
 	}
-	label, err := resolveInlineOperand(labelOp, flat)
+	label, err := resolveInlineOperand(call.label, flat)
 	if err != nil {
 		return "", err
 	}
-	command, err := resolveInlineOperand(commandOp, flat)
+	command, err := resolveInlineOperand(call.command, flat)
 	if err != nil {
 		return "", err
 	}
@@ -86,8 +91,43 @@ func renderInlineCommand(tag string, flat map[string]string) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("inline command must not be empty")
 	}
-	return fmt.Sprintf("[%s](mqqapi://aio/inlinecmd?command=%s&reply=false&enter=true)",
-		escapeMarkdownLinkText(label), url.QueryEscape(command)), nil
+	checkInlineLength("text", command)
+	checkInlineLength("show", label)
+	reference := false
+	if call.hasReference {
+		value, err := resolveInlineOperand(call.reference, flat)
+		if err != nil {
+			return "", err
+		}
+		reference = inlineTruthy(value)
+	}
+	return buildInlineCommand(command, label, reference), nil
+}
+
+// buildInlineCommand 拼官方 markdown 的「参数指令」标签: 点击把 text 填进输入框, 用户补完再发。
+func buildInlineCommand(command, label string, reference bool) string {
+	out := `<qqbot-cmd-input text="` + encodeValue(command) + `"`
+	if label != command {
+		out += ` show="` + encodeValue(label) + `"`
+	}
+	if reference {
+		out += ` reference="true"`
+	}
+	return out + " />"
+}
+
+func inlineTruthy(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes":
+		return true
+	}
+	return false
+}
+
+func checkInlineLength(field, value string) {
+	if n := utf8.RuneCountInString(value); n > inlineTextLimit {
+		log.Warnf("inline 的 %s 有 %d 个字符, 超过官方上限 %d, 客户端可能不认这条点击指令", field, n, inlineTextLimit)
+	}
 }
 
 func resolveInlineOperand(op inlineOperand, flat map[string]string) (string, error) {
@@ -101,19 +141,31 @@ func resolveInlineOperand(op inlineOperand, flat map[string]string) (string, err
 	return value, nil
 }
 
-func parseInlineCall(tag string) (inlineOperand, inlineOperand, error) {
+type inlineCall struct {
+	label        inlineOperand
+	command      inlineOperand
+	reference    inlineOperand
+	hasReference bool
+}
+
+func parseInlineCall(tag string) (inlineCall, error) {
 	body, ok := inlineCallBody(tag)
 	if !ok {
-		return inlineOperand{}, inlineOperand{}, fmt.Errorf("not an inline call: %s", tag)
+		return inlineCall{}, fmt.Errorf("not an inline call: %s", tag)
 	}
 	parts, err := parseInlineOperands(body)
 	if err != nil {
-		return inlineOperand{}, inlineOperand{}, err
+		return inlineCall{}, err
 	}
-	if len(parts) != 2 {
-		return inlineOperand{}, inlineOperand{}, fmt.Errorf("inline expects 2 args: label command")
+	if len(parts) < 2 || len(parts) > 3 {
+		return inlineCall{}, fmt.Errorf("inline expects 2 or 3 args: label command [reference]")
 	}
-	return parts[0], parts[1], nil
+	call := inlineCall{label: parts[0], command: parts[1]}
+	if len(parts) == 3 {
+		call.reference = parts[2]
+		call.hasReference = true
+	}
+	return call, nil
 }
 
 func inlineCallBody(tag string) (string, bool) {
@@ -189,15 +241,4 @@ func parseQuotedInlineOperand(input string, start int, quote rune, quoteSize int
 		}
 	}
 	return "", 0, fmt.Errorf("inline quoted arg is not closed")
-}
-
-func escapeMarkdownLinkText(input string) string {
-	replacer := strings.NewReplacer(
-		"\\", "\\\\",
-		"[", "\\[",
-		"]", "\\]",
-		"\r", " ",
-		"\n", " ",
-	)
-	return replacer.Replace(input)
 }

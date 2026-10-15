@@ -204,6 +204,17 @@ func Run() {
 		MaxHeaderBytes:    1 << 20,
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	overrides := templates.NewOverrides(appConfig.Templates.OverrideDir, appConfig.Templates.Interval())
+	if err := overrides.Load(); err != nil {
+		logger.Warnf("模板覆盖层装载失败: %v", err)
+	}
+	if overrides.Root() != "" {
+		logger.Infof("模板覆盖层: %s (每 %s 重扫一次)", overrides.Root(), appConfig.Templates.Interval())
+		go overrides.Watch(ctx)
+	}
 	logger.Infof("管理台: http://%s/admin", net.JoinHostPort(appConfig.ListenAddr, strconv.Itoa(int(appConfig.Port))))
 	logger.Infof("注册了%v个Markdown模板, %v个HTML模板", templates.GetMarkdownTemplateCount(), templates.GetHTMLTemplateCount())
 	logger.Infof("注册了%v个指令", plugin.GetCommandCount())
@@ -219,8 +230,6 @@ func Run() {
 		}
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	op := opStop
 	select {
 	case <-ctx.Done():
