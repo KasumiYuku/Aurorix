@@ -18,6 +18,15 @@ const (
 	KindAudit
 	KindServer
 	KindParam
+	// KindPassiveExpired 被动回复窗口已失效（msg_id/event_id 过期，或次数超限）。
+	//
+	// 单独成一类而不是塞进 KindNotFound：那类说的是"这条消息不存在了"，
+	// 而这里说的是"**你还能发消息，只是不能再回复那条了**" —— 后者的处置是
+	// 换主动通道重发（见 lib/message 的三级降级），与 KindNotFound 完全不同。
+	//
+	// 实测现场（2026-10-14）：一次冷启动全量扫描 4m58s，结果出来时
+	// `ERROR 消息已过期，不能回复`，图已经渲染好也传到了图床，就是发不出去。
+	KindPassiveExpired
 )
 
 // QQError 业务错误。ResetAfter 仅 KindRateLimit 时有值。
@@ -110,23 +119,37 @@ var semantic = map[int]Kind{
 	100017:   KindRateLimit,
 	40034100: KindRateLimit,
 
+	//权限类：机器人不在群里、被禁言、没有主动消息权限、无 ARK/Markdown 模板权限。
+	//后面几个是**主动降级失败**最常见的原因（见 lib/message 的三级降级收尾日志）：
+	//主动群聊撞上这些码，就该退到私聊。
 	11300:    KindPermission,
 	11700:    KindPermission,
 	304004:   KindPermission,
 	304036:   KindPermission,
 	304064:   KindPermission,
+	40034127: KindPermission,
+	//被动窗口失效：都能靠"改走主动通道"救回来，所以单独一类。
+	//304103 / 40034005 / 40034031 是同一件事的三种上游表述（消息 ID / msg_id / 消息）。
+	304103:   KindPassiveExpired,
+	40034005: KindPassiveExpired,
+	40034031: KindPassiveExpired,
+	//event_id 过期、或该事件不支持被动回复 —— 事件维度的窗口没了，与消息维度同一处置。
+	40034026: KindPassiveExpired,
+	40034027: KindPassiveExpired,
+	//40034128「被动回复时间或次数超限」也归这里：现象同源（被动窗口没了），处置相同。
+	//标注：它没有实测样本（我们是按错误码语义归的），第一次真遇到时留意日志确认。
+	40034128: KindPassiveExpired,
+	//权限类：机器人不在群里、被禁言、没有主动消息权限。
+	//它们是**主动降级失败**最常见的原因（见 lib/message 的三级降级收尾日志）：
+	//主动群聊撞上这几个码，就该退到私聊。
 	40034101: KindPermission,
 	40034105: KindPermission,
-	40034127: KindPermission,
 	40054002: KindPermission,
 	40054003: KindPermission,
 	40054016: KindPermission,
 
-	304103:   KindNotFound,
-	40034005: KindNotFound,
 	40034024: KindNotFound,
-	40034026: KindNotFound,
-
+	//消息审核中不算失败：api.sendWithRetry 会等审核结果，走到这里说明审核没过。
 	304023: KindAudit,
 
 	40034004: KindServer,
@@ -144,10 +167,8 @@ var semantic = map[int]Kind{
 	40034010: KindParam,
 	40034011: KindParam,
 	40034025: KindParam,
-	40034027: KindParam,
 	40034028: KindParam,
 	40034029: KindParam,
-	40034031: KindParam,
 	40034106: KindParam,
 	40034108: KindParam,
 	40034109: KindParam,
@@ -188,4 +209,14 @@ func As(err error) (*QQError, bool) {
 		return qe, true
 	}
 	return nil, false
+}
+
+// IsPassiveExpired 这个错误是否意味着"被动回复窗口没了，该改走主动通道"。
+//
+// 这是消息层三级降级的**唯一判据**。做成函数而不是让调用方自己比 Kind，
+// 是为了让"哪些码算过期"只有 map 里那一处真相 —— 上游加码时改一行就够，
+// 不用去追所有 if。
+func IsPassiveExpired(err error) bool {
+	qe, ok := As(err)
+	return ok && qe.Kind == KindPassiveExpired
 }
