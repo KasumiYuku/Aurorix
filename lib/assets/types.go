@@ -30,3 +30,11 @@ type ImageProvider interface {
 
 // ProviderFactory 图床工厂：注入 HTTP 客户端与配置实例化 provider。
 type ProviderFactory func(cl *Client, config map[string]any) (ImageProvider, error)
+
+// UploadOptions 是一次图床转存的选项。
+type UploadOptions struct {
+	// Provider 指定只用这个图床；空表示按配置优先级轮询，指定了就不回落。
+	Provider string
+	GroupID  string
+	UserID   string
+}

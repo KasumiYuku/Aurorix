@@ -156,8 +156,13 @@ func (h *ImageHost) Resolve(src any) (ResolvedImage, error) {
 
 // ResolveTo 同 Resolve，额外带上会话目标 openid。
 func (h *ImageHost) ResolveTo(src any, groupID, userID string) (ResolvedImage, error) {
+	return h.ResolveWith(src, UploadOptions{GroupID: groupID, UserID: userID})
+}
+
+// ResolveWith 同 ResolveTo，另外可以指定图床（见 UploadOptions.Provider）。
+func (h *ImageHost) ResolveWith(src any, opt UploadOptions) (ResolvedImage, error) {
 	if s, ok := src.(string); ok {
-		return h.ImgToURLTo(s, groupID, userID)
+		return h.ImgToURLWith(s, opt)
 	}
 	in, err := DecodeImage(src)
 	if err != nil {
@@ -171,10 +176,10 @@ func (h *ImageHost) ResolveTo(src any, groupID, userID string) (ResolvedImage, e
 			}
 		}
 	}
-	url, provider, providerSessionScoped, err := h.upload(ProviderInput{
+	url, provider, providerSessionScoped, err := h.uploadTo(ProviderInput{
 		Buffer: in.Data, Filename: in.Filename, MimeType: in.MimeType,
-		Origin: "内存字节", GroupID: groupID, UserID: userID,
-	})
+		Origin: "内存字节", GroupID: opt.GroupID, UserID: opt.UserID,
+	}, opt.Provider)
 	if err != nil {
 		return ResolvedImage{}, err
 	}
@@ -196,6 +201,11 @@ func (h *ImageHost) ImgToURL(src string) (ResolvedImage, error) {
 
 // ImgToURLTo 同 ImgToURL，额外带上会话目标 openid（见 ResolveTo）。
 func (h *ImageHost) ImgToURLTo(src string, groupID, userID string) (ResolvedImage, error) {
+	return h.ImgToURLWith(src, UploadOptions{GroupID: groupID, UserID: userID})
+}
+
+// ImgToURLWith 同 ImgToURLTo，另外可以指定图床（见 UploadOptions.Provider）。
+func (h *ImageHost) ImgToURLWith(src string, opt UploadOptions) (ResolvedImage, error) {
 	for _, prefix := range h.whitelist {
 		if strings.HasPrefix(src, prefix) {
 			return ResolvedImage{URL: src}, nil
@@ -205,12 +215,12 @@ func (h *ImageHost) ImgToURLTo(src string, groupID, userID string) (ResolvedImag
 		return ResolvedImage{URL: src}, nil
 	}
 
-	input, err := h.load(src, groupID, userID)
+	input, err := h.load(src, opt.GroupID, opt.UserID)
 	if err != nil {
 		return ResolvedImage{URL: src}, nil
 	}
 
-	url, provider, providerSessionScoped, err := h.upload(input)
+	url, provider, providerSessionScoped, err := h.uploadTo(input, opt.Provider)
 	if err != nil {
 		return ResolvedImage{URL: src}, err
 	}
@@ -347,10 +357,19 @@ func (h *ImageHost) fetchRemote(src, groupID, userID string) (ProviderInput, err
 }
 
 func (h *ImageHost) upload(input ProviderInput) (string, string, bool, error) {
+	return h.uploadTo(input, "")
+}
+
+// uploadTo 只试 candidates 挑出来的图床。
+func (h *ImageHost) uploadTo(input ProviderInput, provider string) (string, string, bool, error) {
+	providers, err := h.candidates(provider)
+	if err != nil {
+		return "", "", false, err
+	}
 	var errs []error
 	ctx := context.Background()
 	desc := describeInput(input)
-	for _, p := range h.providers {
+	for _, p := range providers {
 		start := time.Now()
 		url, err := p.Upload(ctx, input)
 		upCost := time.Since(start)
@@ -395,6 +414,31 @@ func (h *ImageHost) upload(input ProviderInput) (string, string, bool, error) {
 		return url, p.Name(), sessionScoped(p), nil
 	}
 	return "", "", false, fmt.Errorf("all providers failed: %w", errors.Join(errs...))
+}
+
+// candidates 挑出这一次要试的图床；provider 为空取全部，指定了就必须命中。
+func (h *ImageHost) candidates(provider string) ([]ImageProvider, error) {
+	if len(h.providers) == 0 {
+		return nil, errors.New("这台实例没配图床")
+	}
+	if provider == "" {
+		return h.providers, nil
+	}
+	for _, p := range h.providers {
+		if p.Name() == provider {
+			return []ImageProvider{p}, nil
+		}
+	}
+	return nil, fmt.Errorf("没有 %q 这个图床，可用的是 %s", provider, strings.Join(h.ProviderNames(), "、"))
+}
+
+// ProviderNames 返回实际启用的图床名，顺序即尝试顺序。
+func (h *ImageHost) ProviderNames() []string {
+	out := make([]string, 0, len(h.providers))
+	for _, p := range h.providers {
+		out = append(out, p.Name())
+	}
+	return out
 }
 
 func sessionScoped(p ImageProvider) bool {
