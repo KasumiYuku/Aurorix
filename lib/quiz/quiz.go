@@ -42,10 +42,13 @@ const (
 )
 
 // Stage 是一层线索: 到点放出来, 还原度与形态随层变。
+// Stage 是一层线索: 到点放出来, 看得到多大一块、糊到什么程度都随层变。
 type Stage struct {
 	At time.Duration
-	// Level 是这一层的还原度(0→1); 收局揭晓那张按 1 画。
+	// Level 是这一层的还原度(0 = 糊到认不出, 1 = 原图); 收局揭晓那张按 1 画。
 	Level float64
+	// Zoom 是这一层露出曲绘的多少(0→1, 1 = 整张); 收局揭晓那张按 1 画。
+	Zoom float64
 	// Variant 是这一层的形态名; 空表示沿用这一局的形态(见 Round)。
 	Variant string
 }
@@ -61,18 +64,26 @@ type Rules struct {
 }
 
 // DefaultRules 是五层、4 分 30 秒、三次提示、45 秒冷却的一套起手值。
+// DefaultRules 是一局的节奏: 九层(每 30 秒一层)、4 分 30 秒收局、三次提示、两次之间 15 秒。
+//
+// Level 与 Zoom 一起把难度铺开: 开局只看得到曲绘的十分之一, 而且糊得认不出, 之后每层既多露一点、
+// 又清一点 —— 前几层基本靠配色与构图猜, 末尾才看得出画的是什么。
 func DefaultRules() Rules {
 	return Rules{
 		Stages: []Stage{
-			{At: 0, Level: 0.06},
-			{At: 50 * time.Second, Level: 0.24},
-			{At: 105 * time.Second, Level: 0.46},
-			{At: 160 * time.Second, Level: 0.62},
-			{At: 230 * time.Second, Level: 0.80},
+			{At: 0, Level: 0.10, Zoom: 0.10},
+			{At: 30 * time.Second, Level: 0.20, Zoom: 0.16},
+			{At: 60 * time.Second, Level: 0.30, Zoom: 0.24},
+			{At: 90 * time.Second, Level: 0.42, Zoom: 0.34},
+			{At: 120 * time.Second, Level: 0.54, Zoom: 0.45},
+			{At: 150 * time.Second, Level: 0.66, Zoom: 0.58},
+			{At: 180 * time.Second, Level: 0.76, Zoom: 0.72},
+			{At: 210 * time.Second, Level: 0.86, Zoom: 0.86},
+			{At: 240 * time.Second, Level: 0.94, Zoom: 1},
 		},
 		Lifetime:     270 * time.Second,
 		HintLimit:    3,
-		HintCooldown: 45 * time.Second,
+		HintCooldown: 15 * time.Second,
 	}
 }
 
@@ -97,10 +108,13 @@ type Hint struct {
 
 // Task 是"出这一张图"的全部输入。
 type Task struct {
-	Answer  Answer
-	Stage   int
-	Stages  int
+	Answer Answer
+	Stage  int
+	Stages int
+	// Level 是这一层的还原度(0→1); Zoom 是露出曲绘的多少(0→1) —— 两个都由插件解释:
+	// 一个管"糊成什么样", 一个管"能看到多大一块"(见 ink 的 degrade.Zoom)。
 	Level   float64
+	Zoom    float64
 	Variant string
 	Final   bool
 	Seed    int64
@@ -213,17 +227,14 @@ type session struct {
 	variant string
 	seed    int64
 	stage   int
-	// stageMsg / hintMsg 是这一局占的两条消息(谜面一条、提示一条): 各自撤旧发新, 互不顶掉。
-	stageMsg string
-	hintMsg  string
-	hinted   int
-	tier     int
-	hintAt   time.Time
-	used     []Hint
-	started  time.Time
-	done     bool
-	stop     chan struct{}
-	once     sync.Once
+	hinted  int
+	tier    int
+	hintAt  time.Time
+	used    []Hint
+	started time.Time
+	done    bool
+	stop    chan struct{}
+	once    sync.Once
 }
 
 // New 装配; Source 与 Views 缺一不可。
@@ -372,7 +383,7 @@ func (q *Quiz) Hint(m *context.MessageManager) error {
 		Kind: KindHint, Task: task, Percent: percent(task.Level),
 		Hint: hint, Left: left, Used: used,
 	}
-	return q.send(s, task, view, m.UserId, &s.hintMsg)
+	return q.send(s, task, view, m.UserId)
 }
 
 // run 是一局的节拍: 到点放下一层线索, 到点收局。
@@ -390,7 +401,7 @@ func (q *Quiz) run(s *session) {
 	q.reveal(s, s.anchor, "时间到", "")
 }
 
-// advance 放下一层线索(撤掉上一条)。
+// advance 放下一层线索: 新的一张发出去, 上一张留着。
 func (q *Quiz) advance(s *session) {
 	q.mu.Lock()
 	if s.done || s.stage >= len(q.rules.Stages) {
@@ -399,20 +410,22 @@ func (q *Quiz) advance(s *session) {
 	}
 	s.stage++
 	task := q.task(s, s.stage, false)
+	used := append([]Hint(nil), s.used...)
 	q.mu.Unlock()
 
+	view := Caption{Kind: KindStage, Task: task, Percent: percent(task.Level), Used: used}
 	if !q.submit(func() {
-		q.send(s, task, Caption{Kind: KindStage, Task: task, Percent: percent(task.Level)}, "", &s.stageMsg)
+		q.send(s, task, view, "")
 	}) {
 		logger.Warnf("第 %d 层没排上出图队列, 这一层跳过", task.Stage)
 	}
 }
 
-// reveal 收局: 用揭晓卡顶掉场上的那一层(提示卡留着, 那是这一局的账)。
+// reveal 收局: 摆出答案那张(整张曲绘 + 这首歌的详情)。前面的记录都留着。
 func (q *Quiz) reveal(s *session, m *context.MessageManager, head, reason string) {
 	task := q.task(s, len(q.rules.Stages), true)
 	view := q.over(s, task, head, reason)
-	if !q.submit(func() { q.send(s, task, view, "", &s.stageMsg) }) {
+	if !q.submit(func() { q.send(s, task, view, "") }) {
 		logger.Warnf("收局没排上出图队列, 改用文字")
 		if err := q.notice(m, head); err != nil {
 			logger.Warnf("收局回复失败: %v", err)
@@ -431,19 +444,13 @@ func (q *Quiz) touch(s *session, m *context.MessageManager) {
 	q.mu.Unlock()
 }
 
-// send 渲染并发出这一张卡; slot 是这张卡占的那条消息(撤旧发新都按它, nil 表示不占位)。
-func (q *Quiz) send(s *session, task Task, view Caption, mention string, slot *string) error {
+// send 渲染并发出这一张卡。
+//
+// **不撤回旧的**: 一层层看下来是这一局的记录, 撤掉之后"上一张多糊、提示给过什么"就查不到了。
+func (q *Quiz) send(s *session, task Task, view Caption, mention string) error {
 	q.mu.Lock()
-	anchor, prev := s.anchor, ""
-	if slot != nil {
-		prev = *slot
-	}
+	anchor := s.anchor
 	q.mu.Unlock()
-	if slot != nil && prev != "" {
-		if err := q.sender.Recall(anchor, prev); err != nil {
-			logger.Warnf("撤回上一条线索失败(不影响这一局): %v", err)
-		}
-	}
 	img, err := q.source.Draw(task)
 	if err != nil {
 		logger.Warnf("第 %d 层出图失败: %v", task.Stage, err)
@@ -454,15 +461,9 @@ func (q *Quiz) send(s *session, task Task, view Caption, mention string, slot *s
 		Image: img, TemplateID: tplID, Args: args, Keyboard: q.Keyboard(),
 		NoFooter: true, Mention: mention,
 	}
-	id, err := q.sender.Post(anchor, out)
-	if err != nil {
+	if _, err := q.sender.Post(anchor, out); err != nil {
 		logger.Warnf("第 %d 层发送失败: %v", task.Stage, err)
 		return err
-	}
-	if slot != nil {
-		q.mu.Lock()
-		*slot = id
-		q.mu.Unlock()
 	}
 	return nil
 }
@@ -485,20 +486,20 @@ func (q *Quiz) over(s *session, task Task, head, reason string) Caption {
 	}
 }
 
-// task 按层号造一份输入; final 为真表示这是收局揭晓那张。
+// task 按层号造一份输入; final 为真表示这是收局揭晓那张(整张图 + 不再损坏)。
 func (q *Quiz) task(s *session, stage int, final bool) Task {
 	st := q.rules.Stages[clamp(stage-1, 0, len(q.rules.Stages)-1)]
 	variant := st.Variant
 	if variant == "" {
 		variant = s.variant
 	}
-	level := st.Level
+	level, zoom := st.Level, st.Zoom
 	if final {
-		level = 1
+		level, zoom = 1, 1
 	}
 	return Task{
 		Answer: s.answer, Stage: clamp(stage, 1, len(q.rules.Stages)), Stages: len(q.rules.Stages),
-		Level: level, Variant: variant, Final: final, Seed: s.seed,
+		Level: level, Zoom: zoom, Variant: variant, Final: final, Seed: s.seed,
 	}
 }
 
