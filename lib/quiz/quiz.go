@@ -31,7 +31,9 @@ var (
 type Kind uint8
 
 const (
-	// KindStage 是线索卡(谜面)。
+	// KindStart 是开局那张(说清楚怎么玩)。
+	KindStart Kind = iota
+	// KindStage 是"这一步做了什么"的线索卡。
 	KindStage Kind = iota
 	// KindHint 是提示卡。
 	KindHint
@@ -41,21 +43,10 @@ const (
 	KindNotice
 )
 
-// Stage 是一层线索: 到点放出来, 还原度与形态随层变。
-// Stage 是一层线索: 到点放出来, 看得到多大一块、糊到什么程度都随层变。
-type Stage struct {
-	At time.Duration
-	// Level 是这一层的还原度(0 = 糊到认不出, 1 = 原图); 收局揭晓那张按 1 画。
-	Level float64
-	// Zoom 是这一层露出曲绘的多少(0→1, 1 = 整张); 收局揭晓那张按 1 画。
-	Zoom float64
-	// Variant 是这一层的形态名; 空表示沿用这一局的形态(见 Round)。
-	Variant string
-}
-
 // Rules 是一局的规矩; 零值会补齐成 DefaultRules 的那套。
 type Rules struct {
-	Stages []Stage
+	// StepInterval 是每隔多久往前走一步: 视野 / 清晰度 / 干扰三样里随机挑一样推进。
+	StepInterval time.Duration
 	// Lifetime 是自动收局的时刻。
 	Lifetime time.Duration
 	// HintLimit 是一局最多揭几条提示; HintCooldown 是两条之间的冷却(全桌共用)。
@@ -63,35 +54,28 @@ type Rules struct {
 	HintCooldown time.Duration
 }
 
-// DefaultRules 是五层、4 分 30 秒、三次提示、45 秒冷却的一套起手值。
-// DefaultRules 是一局的节奏: 九层(每 30 秒一层)、4 分 30 秒收局、三次提示、两次之间 15 秒。
+// DefaultRules 是一局的节奏: 每 15 秒走一步、4 分 30 秒收局、三次提示、两次之间 15 秒。
 //
-// Level 与 Zoom 一起把难度铺开: 开局只看得到曲绘的十分之一, 而且糊得认不出, 之后每层既多露一点、
-// 又清一点 —— 前几层基本靠配色与构图猜, 末尾才看得出画的是什么。
+// 开局有多难、每一步推多少由插件定(见 Round 与 Source.Step), 本包只管"每隔多久往前走一步"。
 func DefaultRules() Rules {
 	return Rules{
-		Stages: []Stage{
-			{At: 0, Level: 0.10, Zoom: 0.10},
-			{At: 30 * time.Second, Level: 0.20, Zoom: 0.16},
-			{At: 60 * time.Second, Level: 0.30, Zoom: 0.24},
-			{At: 90 * time.Second, Level: 0.42, Zoom: 0.34},
-			{At: 120 * time.Second, Level: 0.54, Zoom: 0.45},
-			{At: 150 * time.Second, Level: 0.66, Zoom: 0.58},
-			{At: 180 * time.Second, Level: 0.76, Zoom: 0.72},
-			{At: 210 * time.Second, Level: 0.86, Zoom: 0.86},
-			{At: 240 * time.Second, Level: 0.94, Zoom: 1},
-		},
+		StepInterval: 15 * time.Second,
 		Lifetime:     270 * time.Second,
 		HintLimit:    3,
 		HintCooldown: 15 * time.Second,
 	}
 }
 
-// Round 是一局的形态与答案。
+// Round 是一局的答案、形态与开局难度。
 type Round struct {
 	Answer Answer
 	// Variant 是这一局的形态名(插件自己的词, 如 "polar"); 只透传给 Draw 与 Views。
 	Variant string
+	// Zoom 是开局露出曲绘的多少(0→1); Level 是开局的还原度(0→1); Interference 是干扰强度
+	// (0→1, 乘在变体上)。三个都由插件定, 之后每一步在它们身上往前推(见 Source.Step)。
+	Zoom         float64
+	Level        float64
+	Interference float64
 }
 
 // Answer 是这一局要猜的东西; Data 由插件自己解释, 本包不碰。
@@ -109,27 +93,30 @@ type Hint struct {
 // Task 是"出这一张图"的全部输入。
 type Task struct {
 	Answer Answer
-	Stage  int
-	Stages int
-	// Level 是这一层的还原度(0→1); Zoom 是露出曲绘的多少(0→1) —— 两个都由插件解释:
-	// 一个管"糊成什么样", 一个管"能看到多大一块"(见 ink 的 degrade.Zoom)。
-	Level   float64
-	Zoom    float64
-	Variant string
-	Final   bool
-	Seed    int64
+	// Step 是第几步(1 = 开局那张), 只给日志与用例看, 不画到图上。
+	Step int
+	// Level 是还原度(0→1); Zoom 是露出曲绘的多少(0→1); Interference 是干扰强度(0→1) ——
+	// 三个都由插件解释: 一个管"糊成什么样", 一个管"看得到多大一块", 一个管"花成什么样"。
+	Level        float64
+	Zoom         float64
+	Interference float64
+	Variant      string
+	// Final 为真表示这是收局揭晓那张(整张原图 + 无干扰)。
+	Final bool
+	Seed  int64
 }
 
 // Caption 是"这一张说些什么"的全部输入。
 type Caption struct {
 	Kind Kind
 	Task
-	Percent int
-	Hint    Hint
-	Left    int
-	Head    string
-	Reason  string
-	// Elapsed 是这一局已经过去的时间; Used 是这一局揭过的提示(收局卡用)。
+	// Step 是这一步的人话名(如"视野扩大"), 由 Source.Step 给。
+	Step   string
+	Hint   Hint
+	Left   int
+	Head   string
+	Reason string
+	// Elapsed 是这一局已经过去的时间; Used 是这一局揭过的提示。
 	Elapsed time.Duration
 	Used    []Hint
 }
@@ -141,8 +128,11 @@ type Views interface {
 
 // Source 是插件给这一局的内容。
 type Source interface {
-	// Open 开局时抽一题并定下这一局的形态; ok=false 表示抽不出来。
+	// Open 开局时抽一题并定下这一局的形态与开局难度; ok=false 表示抽不出来。
 	Open(rng *rand.Rand) (Round, bool)
+	// Step 从当前这份输入往前走一格(视野更大 / 更清一点 / 干扰更弱一点…), 并给这一步起个人话名;
+	// ok=false 表示没得走了(已经全露、全清、没干扰), 那就等着收局。
+	Step(from Task, rng *rand.Rand) (Task, string, bool)
 	// Hints 报出这一题可给的提示, 外层是档: 越往后的档越贴脸。
 	Hints(a Answer) [][]Hint
 	// Judge 判定一次作答; hit 为真即猜中, notice 是要回给作答者的一句话(空 = 不回话)。
@@ -226,7 +216,13 @@ type session struct {
 	answer  Answer
 	variant string
 	seed    int64
-	stage   int
+	// rng 是这一局的随机流: 抽题与"每一步做什么"都用它, 只有开局与节拍 goroutine 碰。
+	rng *rand.Rand
+	// zoom / level / noise 是当前这份输入的三个旋钮, 每一步往前走一格(见 Source.Step)。
+	zoom    float64
+	level   float64
+	noise   float64
+	step    int
 	hinted  int
 	tier    int
 	hintAt  time.Time
@@ -241,8 +237,8 @@ type session struct {
 func New(d Deps) *Quiz {
 	rules := d.Rules
 	fallback := DefaultRules()
-	if len(rules.Stages) == 0 {
-		rules.Stages = fallback.Stages
+	if rules.StepInterval <= 0 {
+		rules.StepInterval = fallback.StepInterval
 	}
 	if rules.Lifetime <= 0 {
 		rules.Lifetime = fallback.Lifetime
@@ -285,21 +281,24 @@ func (q *Quiz) Keyboard() *buttons.Keyboard {
 		Build()
 }
 
-// Start 开一局: 抽题、摆第一层、然后按时间表推到收局。同一个会话同时只能有一局。
+// Start 开一局: 抽题、摆出开局那张, 然后每隔 StepInterval 往前走一步, 到点收局。
+// 同一个会话同时只能有一局。
 func (q *Quiz) Start(m *context.MessageManager) error {
-	round, ok := q.source.Open(rand.New(rand.NewPCG(uint64(q.clock().UnixNano()), seedPattern)))
-	if !ok {
-		return ErrNoQuestion
-	}
+	now := q.clock()
 	s := &session{
 		key:     key(m.GroupId, m.UserId),
 		anchor:  m,
-		answer:  round.Answer,
-		variant: round.Variant,
-		seed:    q.clock().UnixNano(),
-		started: q.clock(),
+		seed:    now.UnixNano(),
+		rng:     rand.New(rand.NewPCG(uint64(now.UnixNano()), seedPattern)),
+		started: now,
 		stop:    make(chan struct{}),
 	}
+	round, ok := q.source.Open(s.rng)
+	if !ok {
+		return ErrNoQuestion
+	}
+	s.answer, s.variant = round.Answer, round.Variant
+	s.zoom, s.level, s.noise, s.step = round.Zoom, round.Level, round.Interference, 1
 	q.mu.Lock()
 	if old := q.rounds[s.key]; old != nil && !old.done {
 		q.mu.Unlock()
@@ -308,7 +307,11 @@ func (q *Quiz) Start(m *context.MessageManager) error {
 	q.rounds[s.key] = s
 	q.mu.Unlock()
 
-	q.advance(s)
+	// 开局这张走自己的模板(把"怎么玩"说清楚); 之后每一步只说这一步做了什么。
+	task := q.task(s, false)
+	if !q.submit(func() { q.send(s, task, Caption{Kind: KindStart, Task: task}, "") }) {
+		logger.Warnf("开局的图没排上出图队列")
+	}
 	go q.run(s)
 	return nil
 }
@@ -373,26 +376,24 @@ func (q *Quiz) Hint(m *context.MessageManager) error {
 	s.hinted++
 	s.hintAt = now
 	s.used = append(s.used, hint)
-	stage := s.stage
 	left := q.rules.HintLimit - s.hinted
 	used := append([]Hint(nil), s.used...)
 	q.mu.Unlock()
 
-	task := q.task(s, stage, false)
-	view := Caption{
-		Kind: KindHint, Task: task, Percent: percent(task.Level),
-		Hint: hint, Left: left, Used: used,
-	}
+	task := q.task(s, false)
+	view := Caption{Kind: KindHint, Task: task, Hint: hint, Left: left, Used: used}
 	return q.send(s, task, view, m.UserId)
 }
 
-// run 是一局的节拍: 到点放下一层线索, 到点收局。
+// run 是一局的节拍: 每 StepInterval 往前走一步, 到点收局。
 func (q *Quiz) run(s *session) {
-	for i := 1; i < len(q.rules.Stages); i++ {
-		if !wait(s, s.started.Add(q.rules.Stages[i].At)) {
+	for at := q.rules.StepInterval; at < q.rules.Lifetime; at += q.rules.StepInterval {
+		if !wait(s, s.started.Add(at)) {
 			return
 		}
-		q.advance(s)
+		if !q.step(s) {
+			break
+		}
 	}
 	if !wait(s, s.started.Add(q.rules.Lifetime)) {
 		return
@@ -401,29 +402,38 @@ func (q *Quiz) run(s *session) {
 	q.reveal(s, s.anchor, "时间到", "")
 }
 
-// advance 放下一层线索: 新的一张发出去, 上一张留着。
-func (q *Quiz) advance(s *session) {
+// step 往前走一格: 让插件挑一样推进(视野 / 清晰度 / 干扰), 然后把新的一张发出去。
+//
+// 走不动了(已经全露、全清、没干扰)就返回 false —— 那就只剩等收局。
+func (q *Quiz) step(s *session) bool {
 	q.mu.Lock()
-	if s.done || s.stage >= len(q.rules.Stages) {
+	if s.done {
 		q.mu.Unlock()
-		return
+		return false
 	}
-	s.stage++
-	task := q.task(s, s.stage, false)
+	from := q.taskLocked(s, false)
+	next, label, ok := q.source.Step(from, s.rng)
+	if !ok {
+		q.mu.Unlock()
+		return false
+	}
+	next.Step = from.Step + 1
+	s.step, s.zoom, s.level, s.noise = next.Step, next.Zoom, next.Level, next.Interference
 	used := append([]Hint(nil), s.used...)
 	q.mu.Unlock()
 
-	view := Caption{Kind: KindStage, Task: task, Percent: percent(task.Level), Used: used}
+	view := Caption{Kind: KindStage, Step: label, Task: next, Used: used}
 	if !q.submit(func() {
-		q.send(s, task, view, "")
+		q.send(s, next, view, "")
 	}) {
-		logger.Warnf("第 %d 层没排上出图队列, 这一层跳过", task.Stage)
+		logger.Warnf("第 %d 步没排上出图队列, 这一步跳过", next.Step)
 	}
+	return true
 }
 
 // reveal 收局: 摆出答案那张(整张曲绘 + 这首歌的详情)。前面的记录都留着。
 func (q *Quiz) reveal(s *session, m *context.MessageManager, head, reason string) {
-	task := q.task(s, len(q.rules.Stages), true)
+	task := q.task(s, true)
 	view := q.over(s, task, head, reason)
 	if !q.submit(func() { q.send(s, task, view, "") }) {
 		logger.Warnf("收局没排上出图队列, 改用文字")
@@ -453,7 +463,7 @@ func (q *Quiz) send(s *session, task Task, view Caption, mention string) error {
 	q.mu.Unlock()
 	img, err := q.source.Draw(task)
 	if err != nil {
-		logger.Warnf("第 %d 层出图失败: %v", task.Stage, err)
+		logger.Warnf("第 %d 步出图失败: %v", task.Step, err)
 		return nil
 	}
 	tplID, args := q.views.Caption(view)
@@ -462,7 +472,7 @@ func (q *Quiz) send(s *session, task Task, view Caption, mention string) error {
 		NoFooter: true, Mention: mention,
 	}
 	if _, err := q.sender.Post(anchor, out); err != nil {
-		logger.Warnf("第 %d 层发送失败: %v", task.Stage, err)
+		logger.Warnf("第 %d 步发送失败: %v", task.Step, err)
 		return err
 	}
 	return nil
@@ -481,26 +491,28 @@ func (q *Quiz) over(s *session, task Task, head, reason string) Caption {
 	used := append([]Hint(nil), s.used...)
 	q.mu.Unlock()
 	return Caption{
-		Kind: KindOver, Task: task, Percent: 100, Head: head, Reason: reason,
+		Kind: KindOver, Task: task, Head: head, Reason: reason,
 		Elapsed: q.clock().Sub(s.started), Used: used,
 	}
 }
 
-// task 按层号造一份输入; final 为真表示这是收局揭晓那张(整张图 + 不再损坏)。
-func (q *Quiz) task(s *session, stage int, final bool) Task {
-	st := q.rules.Stages[clamp(stage-1, 0, len(q.rules.Stages)-1)]
-	variant := st.Variant
-	if variant == "" {
-		variant = s.variant
+// task 造一份"当前这份输入"; final 为真表示这是收局揭晓那张(整张原图 + 没有干扰)。
+func (q *Quiz) task(s *session, final bool) Task {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.taskLocked(s, final)
+}
+
+// taskLocked 同 task, 但要求调用方已经持锁(step 要连读带写地推进这一步)。
+func (q *Quiz) taskLocked(s *session, final bool) Task {
+	task := Task{
+		Answer: s.answer, Step: s.step, Variant: s.variant, Seed: s.seed,
+		Level: s.level, Zoom: s.zoom, Interference: s.noise,
 	}
-	level, zoom := st.Level, st.Zoom
 	if final {
-		level, zoom = 1, 1
+		task.Level, task.Zoom, task.Interference, task.Final = 1, 1, 0, true
 	}
-	return Task{
-		Answer: s.answer, Stage: clamp(stage, 1, len(q.rules.Stages)), Stages: len(q.rules.Stages),
-		Level: level, Zoom: zoom, Variant: variant, Final: final, Seed: s.seed,
-	}
+	return task
 }
 
 // finish 收掉一局: 让节拍 goroutine 退出, 并把桌子让出来。
@@ -561,23 +573,11 @@ func key(group, user string) string {
 	return "u:" + user
 }
 
-func percent(level float64) int { return int(level*100 + 0.5) }
-
 func round(d time.Duration) string { return d.Round(time.Second).String() }
 
 func pick(v, fallback string) string {
 	if v == "" {
 		return fallback
-	}
-	return v
-}
-
-func clamp(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
 	}
 	return v
 }
