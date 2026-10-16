@@ -44,8 +44,9 @@ func (manager *MessageManager) baseStruct() *message.Message {
 		OriginalInput: manager.OriginalInput,
 		NoFooter:      manager.NoFooter,
 	}
+	// 降级开关必须每条都开: 一局游戏复用同一个锚点, 只在第一次置它等于后面全关
+	msg.InitRef()
 	if manager.ref == nil {
-		msg.InitRef()
 		manager.ref = msg.MsgRef
 	} else {
 		msg.MsgRef = manager.ref
