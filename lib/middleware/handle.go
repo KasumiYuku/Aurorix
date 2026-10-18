@@ -59,6 +59,7 @@ func dispatchCommand(payload structers.Payload, client *api.BotAPI, opts command
 			Attachments: payload.Data.Attachments,
 		},
 		Raw:      opts.raw,
+		Username: payload.Data.Author.Username,
 		Mentions: payload.Data.Mentions,
 		Quote:    structers.ExtractQuote(payload.Data.MsgElements, payload.Data.MessageScene.Ext),
 	}
