@@ -33,6 +33,29 @@ type menuSnapshot struct {
 	SavedAt    string         `json:"saved_at"`
 }
 
+// panelStore 是同步要用的那几个动作; 抽成接口是为了能在测试里替身。
+type panelStore interface {
+	Get(panelID string) (*api.PanelRecord, error)
+	Create(scope api.PanelScope, panel api.Panel) (string, error)
+	Update(panelID string, panel api.Panel) (int, error)
+	Count() (int, error)
+}
+
+// syncTarget 一个目标场景: 给了 panel_id 就是覆盖它, 没给就是新建一份。
+type syncTarget struct {
+	Scope   api.PanelScope `json:"scope"`
+	PanelID string         `json:"panel_id"`
+}
+
+// syncResult 每个目标单独一条结果。
+type syncResult struct {
+	Scope    api.PanelScope `json:"scope"`
+	PanelID  string         `json:"panel_id,omitempty"`
+	Mode     string         `json:"mode,omitempty"`
+	Snapshot string         `json:"snapshot,omitempty"`
+	Error    string         `json:"error,omitempty"`
+}
+
 func registerMenuRoutes(apiMux *http.ServeMux, deps Deps) {
 	if deps.Client == nil {
 		return
@@ -162,6 +185,33 @@ func registerMenuRoutes(apiMux *http.ServeMux, deps Deps) {
 		result := H{"ok": true}
 		addSnapshotNotice(result, snap, snapErr)
 		writeJSON(w, http.StatusOK, result)
+	})
+	apiMux.HandleFunc("POST /admin/api/menu/sync", func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			From    string       `json:"from"`
+			Targets []syncTarget `json:"targets"`
+		}
+		if err := readJSON(r, &input); err != nil {
+			writeJSON(w, http.StatusBadRequest, H{"error": "请求格式无效"})
+			return
+		}
+		if strings.TrimSpace(input.From) == "" {
+			writeJSON(w, http.StatusBadRequest, H{"error": "没说要同步哪一份面板"})
+			return
+		}
+		results, err := syncPanels(panels, input.From, input.Targets)
+		if err != nil {
+			writePanelError(w, err)
+			return
+		}
+		done := 0
+		for _, res := range results {
+			if res.Error == "" {
+				done++
+			}
+		}
+		menuLog.Infof("同步指令面板: 源=%s 目标=%d 成功=%d 失败=%d", input.From, len(results), done, len(results)-done)
+		writeJSON(w, http.StatusOK, H{"ok": true, "from": input.From, "results": results})
 	})
 
 	apiMux.HandleFunc("GET /admin/api/menu/snapshots", func(w http.ResponseWriter, r *http.Request) {
@@ -368,4 +418,85 @@ func sanitizeName(name string) string {
 		}
 	}
 	return b.String()
+}
+
+// syncPanels 把一份面板同步到其他场景: 给了 panel_id 就覆盖它, 没给就新建一份。
+func syncPanels(store panelStore, from string, targets []syncTarget) ([]syncResult, error) {
+	src, err := store.Get(from)
+	if err != nil {
+		return nil, err
+	}
+	if !editablePanel(src) {
+		return nil, errors.New("这份面板只对指定群或指定人生效, 不能作为同步的来源")
+	}
+	if len(targets) == 0 {
+		return nil, errors.New("没有选要同步到哪个场景")
+	}
+	fresh := 0
+	for _, t := range targets {
+		if !api.ValidPanelScope(t.Scope) {
+			return nil, fmt.Errorf("场景 %q 不认识", t.Scope)
+		}
+		if t.PanelID == "" {
+			fresh++
+		}
+	}
+	if fresh > 0 {
+		count, err := store.Count()
+		if err != nil {
+			return nil, err
+		}
+		if count+fresh > api.PanelMaxPerBot {
+			return nil, fmt.Errorf("要新建 %d 份, 现在已有 %d 份、上限 %d —— 先删掉不用的面板", fresh, count, api.PanelMaxPerBot)
+		}
+	}
+
+	content := api.Panel{Items: append([]api.PanelItem(nil), src.Panel.Items...), Remark: src.Panel.Remark}
+	out := make([]syncResult, 0, len(targets))
+	for _, t := range targets {
+		out = append(out, syncOne(store, t, content))
+	}
+	return out, nil
+}
+
+// syncOne 做一个目标; 失败只记在这条上, 不影响其余。
+func syncOne(store panelStore, target syncTarget, content api.Panel) syncResult {
+	res := syncResult{Scope: target.Scope, PanelID: target.PanelID}
+	if target.PanelID == "" {
+		id, err := store.Create(target.Scope, content)
+		if err != nil {
+			res.Error = err.Error()
+			return res
+		}
+		res.PanelID, res.Mode = id, "created"
+		return res
+	}
+	current, err := store.Get(target.PanelID)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	if !editablePanel(current) {
+		res.Error = "那份也只对指定群或指定人生效, 没动它"
+		return res
+	}
+	if current.Scope != target.Scope {
+		res.Error = "那份面板不在要同步的场景里"
+		return res
+	}
+	snap, snapErr := saveMenuSnapshot("sync", current)
+	if _, err := store.Update(target.PanelID, content); err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	res.Mode = "overwritten"
+	if snapErr == nil && snap != nil {
+		res.Snapshot = snap.File
+	}
+	return res
+}
+
+// editablePanel 只对指定群/指定人生效的面板在服务端是只读的。
+func editablePanel(record *api.PanelRecord) bool {
+	return record != nil && (record.TargetType == "" || record.TargetType == api.PanelTargetAll)
 }

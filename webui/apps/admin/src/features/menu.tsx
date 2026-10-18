@@ -21,7 +21,7 @@ import {
   Th,
   Tooltip,
 } from '@aurorix/webui'
-import { ArrowDown, ArrowUp, GripVertical, History, Pencil, Plus, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, GripVertical, History, Pencil, Plus, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
 import { PageHeader } from '../components/layout'
 import { del, get, post, put } from '../lib/api'
 import { fmtTime } from '../lib/format'
@@ -31,6 +31,7 @@ import type {
   MenuLimits,
   MenuMeta,
   MenuPanels,
+  MenuScopePanels,
   MenuSnapshot,
   MenuSnapshots,
   PanelItem,
@@ -38,6 +39,8 @@ import type {
   PanelRecord,
   PanelRestoreResult,
   PanelScope,
+  PanelSyncResult,
+  PanelSyncTarget,
   PanelWriteResult,
 } from '../lib/types'
 
@@ -397,12 +400,144 @@ function SnapshotsModal({
   )
 }
 
+type SyncChoice = { on: boolean; panelId: string }
+
+function SyncModal({
+  source,
+  scopes,
+  total,
+  maxPerBot,
+  saving,
+  onClose,
+  onSync,
+}: {
+  source: PanelRecord
+  scopes: MenuScopePanels[]
+  total: number
+  maxPerBot: number
+  saving: boolean
+  onClose: () => void
+  onSync: (targets: PanelSyncTarget[]) => Promise<PanelSyncResult | null>
+}) {
+  const others = useMemo(() => scopes.filter((item) => item.scope !== source.scope), [scopes, source.scope])
+  const [choice, setChoice] = useState<Record<string, SyncChoice>>(() => {
+    const init: Record<string, SyncChoice> = {}
+    for (const item of scopes) {
+      if (item.scope === source.scope) continue
+      const first = item.panels.filter(isEditable)[0]
+      init[item.scope] = { on: true, panelId: first?.panel_id ?? '' }
+    }
+    return init
+  })
+  const [result, setResult] = useState<PanelSyncResult | null>(null)
+
+  const picked = others.filter((item) => choice[item.scope]?.on)
+  const creating = picked.filter((item) => !choice[item.scope].panelId).length
+  const overLimit = creating > 0 && total + creating > maxPerBot
+
+  const submit = async () => {
+    const targets: PanelSyncTarget[] = picked.map((item) => ({
+      scope: item.scope,
+      panel_id: choice[item.scope].panelId || undefined,
+    }))
+    setResult(await onSync(targets))
+  }
+
+  const labelOf = (scope: PanelScope) => others.find((item) => item.scope === scope)?.label ?? scope
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="同步到其他场景"
+      description={`用这份面板的 ${source.panel.items.length} 条指令项覆盖别处。没选中的场景不动, 覆盖前会自动留快照。`}
+      width="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
+            {result ? '关闭' : '取消'}
+          </Button>
+          <Button onClick={submit} loading={saving} disabled={result !== null || picked.length === 0 || overLimit}>
+            同步
+          </Button>
+        </>
+      }
+    >
+      {result ? (
+        <div className="flex flex-col gap-2">
+          {result.results.map((item) => (
+            <div key={item.scope} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-16 shrink-0 text-ink-soft">{labelOf(item.scope)}</span>
+              {item.error ? (
+                <Badge tone="danger">失败</Badge>
+              ) : (
+                <Badge tone="neutral">{item.mode === 'created' ? '已新建' : '已覆盖'}</Badge>
+              )}
+              <span className="break-all text-xs text-ink-faint">{item.error ?? item.panel_id}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {others.map((item) => {
+            const now = choice[item.scope]
+            const writable = item.panels.filter(isEditable)
+            const allReadOnly = item.panels.length > 0 && writable.length === 0
+            return (
+              <div key={item.scope} className="flex flex-wrap items-start gap-3">
+                <Switch
+                  checked={now?.on ?? false}
+                  onChange={(next) =>
+                    setChoice((prev) => ({ ...prev, [item.scope]: { ...prev[item.scope], on: next } }))
+                  }
+                  label={`同步到${item.label}`}
+                />
+                <div className="min-w-40 flex-1">
+                  <div className="text-sm">{item.label}</div>
+                  <div className="text-xs text-ink-faint">
+                    {allReadOnly
+                      ? `${item.panels.length} 份都只对指定对象生效, 这里动不了`
+                      : item.panels.length === 0
+                        ? '还没有面板, 会新建一份(占 1 个名额)'
+                        : `共 ${item.panels.length} 份, 选一份覆盖`}
+                  </div>
+                </div>
+                {now?.on && writable.length > 0 && (
+                  <Select
+                    className="w-56"
+                    value={now.panelId}
+                    onChange={(e) =>
+                      setChoice((prev) => ({
+                        ...prev,
+                        [item.scope]: { ...prev[item.scope], panelId: e.target.value },
+                      }))
+                    }
+                    options={writable.map((record) => ({
+                      value: record.panel_id,
+                      label: `${record.panel.remark || record.panel_id} · ${record.panel.items.length} 条`,
+                    }))}
+                  />
+                )}
+              </div>
+            )
+          })}
+          <p className="text-xs text-ink-faint">
+            当前 {total}/{maxPerBot} 个{creating > 0 ? `, 本次会新建 ${creating} 份` : ''}。
+            {overLimit && ' 名额不够, 先删掉不用的面板, 或关掉几个场景。'}
+          </p>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 export default function MenuPage() {
   const [scope, setScope] = useState<PanelScope>('group')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
   const [pending, setPending] = useState('')
   const [snapshotsOpen, setSnapshotsOpen] = useState(false)
+  const [syncSource, setSyncSource] = useState<PanelRecord | null>(null)
   const [confirm, setConfirm] = useState<
     | { kind: 'delete'; record: PanelRecord }
     | { kind: 'save'; draft: Draft }
@@ -498,6 +633,20 @@ export default function MenuPage() {
     } finally {
       setPending('')
       setConfirm(null)
+    }
+  }
+
+  const runSync = async (source: PanelRecord, targets: PanelSyncTarget[]) => {
+    setSaving(true)
+    try {
+      const res = await post<PanelSyncResult>('/menu/sync', { from: source.panel_id, targets })
+      await refresh()
+      return res
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '同步失败', 'err')
+      return null
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -614,6 +763,15 @@ export default function MenuPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            icon={Copy}
+                            disabled={!editable || !limits}
+                            onClick={() => setSyncSource(record)}
+                          >
+                            同步
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             icon={Trash2}
                             disabled={!editable}
                             loading={pending === record.panel_id}
@@ -709,6 +867,18 @@ export default function MenuPage() {
         danger
         pending={pending !== ''}
       />
+
+      {syncSource && (
+        <SyncModal
+          source={syncSource}
+          scopes={panels.data?.scopes ?? []}
+          total={total}
+          maxPerBot={maxPerBot}
+          saving={saving}
+          onClose={() => setSyncSource(null)}
+          onSync={(targets) => runSync(syncSource, targets)}
+        />
+      )}
 
       {saving && (
         <span className="sr-only" role="status">

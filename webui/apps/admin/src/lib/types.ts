@@ -325,3 +325,24 @@ export interface PanelRestoreResult {
   /** overwrite = 原面板还在, 原地覆盖; recreated = 面板已被删, 重建并拿到新 id。 */
   mode: 'overwrite' | 'recreated'
 }
+
+export interface PanelSyncTarget {
+  scope: PanelScope
+  /** 不填 = 在该场景新建一份; 填了 = 覆盖那一份。 */
+  panel_id?: string
+}
+
+export interface PanelSyncItemResult {
+  scope: PanelScope
+  panel_id?: string
+  mode?: 'created' | 'overwritten'
+  /** 覆盖前自动留的快照文件名。 */
+  snapshot?: string
+  error?: string
+}
+
+export interface PanelSyncResult {
+  ok: boolean
+  from: string
+  results: PanelSyncItemResult[]
+}
