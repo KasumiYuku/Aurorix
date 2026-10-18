@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -254,9 +255,6 @@ func (h *ImageHost) ProcessMarkdownTo(input string, groupID, userID string) stri
 		b.WriteString(input[last:start])
 		alt, src := input[loc[2]:loc[3]], input[loc[4]:loc[5]]
 		b.WriteString(h.replaceImage(alt, src, groupID, userID))
-		if end >= len(input) || input[end] != '\n' {
-			b.WriteByte('\n')
-		}
 		last = end
 	}
 	b.WriteString(input[last:])
@@ -281,21 +279,22 @@ func isLocal(src string) bool {
 	if strings.HasPrefix(src, "data:") || strings.HasPrefix(src, "file://") {
 		return true
 	}
-	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		u, err := url.Parse(src)
-		if err != nil {
-			return true
-		}
-		host := u.Hostname()
-		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-			return true
-		}
-		if strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "172.") || strings.HasPrefix(host, "192.168.") {
-			return true
-		}
+	if !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
+		return true
+	}
+	u, err := url.Parse(src)
+	if err != nil {
+		return true
+	}
+	host := u.Hostname()
+	if host == "localhost" || strings.HasSuffix(host, ".local") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
 		return false
 	}
-	return true
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified()
 }
 
 func (h *ImageHost) load(src, groupID, userID string) (ProviderInput, error) {
