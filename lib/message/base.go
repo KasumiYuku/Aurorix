@@ -153,8 +153,14 @@ func (msg *Message) SendWithID() (string, error) {
 	if id, aerr := msg.sendOnce(true); aerr == nil {
 		return id, nil
 	} else if msg.Target != constant.PrivateMessage {
-		//群发不出去（非群成员/被禁言/无权限）：退到私聊用户本人。
+		//群发不出去（非群成员/被禁言/无权限/主动群消息额度用光）：退到私聊用户本人。
 		//这是最后一级 —— 用户至少能拿到结果，而不是一无所获。
+		//
+		//必须在**成功时也打一条日志**：这一级降级之后用户是收得到的，只在"私聊也失败"时才记的话，
+		//线上看到的现象就只剩"消息跑到私聊去了"，而群聊为什么发不出去（额度用光？没权限？被禁言？）
+		//一点线索都没有。群聊的 err 是这里唯一的证据。
+		logger.Warnf("主动群聊发不出去，已退到私聊 group=%s user=%s 群聊err=%v",
+			msg.GroupId, msg.UserId, aerr)
 		msg.Target = constant.PrivateMessage
 		msg.GroupId = ""
 		if id, perr := msg.sendOnce(true); perr == nil {
