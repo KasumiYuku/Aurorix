@@ -65,9 +65,26 @@ function AccessRuleEditor({
   )
 }
 
+// 依赖字段缺省时按可见处理, 免得配置快照不全时整块表单消失。
+function fieldVisible(field: PluginField, values: Record<string, unknown>): boolean {
+  if (!field.show_if) return true
+  if (!(field.show_if.key in values)) return true
+  const current = values[field.show_if.key]
+  return field.show_if.values.includes(typeof current === 'string' ? current : '')
+}
+
 function fieldInput(field: PluginField, value: unknown, onChange: (next: unknown) => void) {
   if (field.type === 'boolean') {
     return <Switch checked={value === true} onChange={onChange} label={field.label} />
+  }
+  if (field.type === 'select' && (field.options ?? []).length > 0) {
+    return (
+      <Select
+        value={typeof value === 'string' ? value : String(field.options?.[0] ?? '')}
+        options={(field.options ?? []).map((option) => ({ value: option, label: option }))}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    )
   }
   if (field.type === 'password') {
     return (
@@ -148,6 +165,8 @@ function PluginDetail({ plugin, onClose }: { plugin: ManagedPlugin; onClose: () 
       setSaving('')
     }
   }
+  const fields = plugin.fields.filter((field) => fieldVisible(field, values))
+
 
   return (
     <Drawer
@@ -158,7 +177,7 @@ function PluginDetail({ plugin, onClose }: { plugin: ManagedPlugin; onClose: () 
       description={plugin.description || plugin.id}
       footer={
         tab === 'config' ? (
-          <Button icon={Save} loading={saving === 'config'} onClick={saveConfig} disabled={plugin.fields.length === 0}>
+          <Button icon={Save} loading={saving === 'config'} onClick={saveConfig} disabled={fields.length === 0}>
             保存配置
           </Button>
         ) : (
@@ -185,18 +204,18 @@ function PluginDetail({ plugin, onClose }: { plugin: ManagedPlugin; onClose: () 
         value={tab}
         onChange={setTab}
         tabs={[
-          { id: 'config', label: '配置', badge: <Badge>{plugin.fields.length}</Badge> },
+          { id: 'config', label: '配置', badge: <Badge>{fields.length}</Badge> },
           { id: 'access', label: '访问控制', badge: <Badge>{plugin.commands.length}</Badge> },
         ]}
       />
 
       <div className="mt-6">
         {tab === 'config' ? (
-          plugin.fields.length === 0 ? (
+          fields.length === 0 ? (
             <EmptyState title="该插件没有可配置项" description="它没有声明 Config 字段。" />
           ) : (
             <div className="flex flex-col gap-5">
-              {plugin.fields.map((field) => (
+              {fields.map((field) => (
                 <Field
                   key={field.key}
                   label={field.label}

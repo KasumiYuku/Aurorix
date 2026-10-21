@@ -11,6 +11,14 @@ export interface LogEntry {
   level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | string
   scope: string
   msg: string
+  /** 从正文里提取出来的群/用户; 没写就是空。 */
+  group?: string
+  user?: string
+}
+
+export interface LogSummary {
+  levels: Record<string, number>
+  scopes: Record<string, number>
 }
 
 export interface LogsView {
@@ -18,6 +26,7 @@ export interface LogsView {
   scopes: string[]
   total: number
   errors: number
+  summary?: LogSummary
 }
 
 export interface LogFilter {
@@ -25,6 +34,8 @@ export interface LogFilter {
   minLevel?: string
   scope?: string
   text?: string
+  group?: string
+  user?: string
 }
 
 export interface Counters {
@@ -127,6 +138,11 @@ export interface ControlView {
 /** 实时快照在 Overview 上多带一个服务器时钟毫秒，供前端每秒重锚 uptime。 */
 export type LiveOverview = Overview & { now: number }
 
+export interface PluginShowIf {
+  key: string
+  values: string[]
+}
+
 export interface PluginField {
   key: string
   label: string
@@ -134,6 +150,8 @@ export interface PluginField {
   type: string
   placeholder?: string
   required?: boolean
+  options?: string[]
+  show_if?: PluginShowIf
 }
 
 export interface AccessRule {
@@ -175,7 +193,7 @@ export interface CoreField {
   key: string
   label: string
   desc?: string
-  kind: 'text' | 'secret' | 'number' | 'bool' | 'intlist' | 'strlist' | 'textlist' | 'multiselect' | 'select' | 'note'
+  kind: 'text' | 'secret' | 'number' | 'bool' | 'intlist' | 'strlist' | 'textlist' | 'textarea' | 'multiselect' | 'select' | 'note'
   options?: string[]
   placeholder?: string
   hot: boolean
@@ -345,4 +363,30 @@ export interface PanelSyncResult {
   ok: boolean
   from: string
   results: PanelSyncItemResult[]
+}
+
+export interface InboxConversation {
+  id: string
+  kind: 'group' | 'c2c'
+  /** 群名; 拉不到时是空串, 页面降级显示 openid。 */
+  name: string
+  last_at: string
+  last_preview: string
+}
+
+export interface InboxMessage {
+  id: number
+  conv_id: string
+  kind: 'group' | 'c2c'
+  direction: 'in' | 'out'
+  sender_id?: string
+  sender_name?: string
+  content: string
+  platform_id?: string
+  created_at: string
+}
+
+export interface InboxMessagesView {
+  messages: InboxMessage[]
+  has_more: boolean
 }

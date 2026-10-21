@@ -267,6 +267,10 @@ func ConfiguredPlugins() []ConfiguredPlugin {
 			if field.Type == "password" {
 				_, configured := values[field.Key].(string)
 				values[field.Key] = configured && values[field.Key] != ""
+				continue
+			}
+			if _, ok := values[field.Key]; !ok && field.Default != nil {
+				values[field.Key] = field.Default
 			}
 		}
 		name := registered.Name

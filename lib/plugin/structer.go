@@ -54,4 +54,20 @@ type ConfigField struct {
 	Type        string `json:"type"`
 	Placeholder string `json:"placeholder,omitempty"`
 	Required    bool   `json:"required,omitempty"`
+
+	// Options 非空时按下拉框渲染, Type 写 select。
+	Options []string `json:"options,omitempty"`
+
+	// ShowIf 让字段只在另一字段取到指定值时才出现: 一份配置里放多套互斥参数
+	// (比如审核平台选 AI 还是腾讯云)时, 不隐藏的话用户分不清哪些该填。
+	ShowIf *ShowIf `json:"show_if,omitempty"`
+
+	// Default 是面板首次打开时的初始值; 布尔和文本框缺值本来就按空渲染, 只有下拉
+	// 和依赖它的 ShowIf 判断需要, 否则没存过配置时条件字段会全露出来。
+	Default any `json:"default,omitempty"`
+}
+
+type ShowIf struct {
+	Key    string   `json:"key"`
+	Values []string `json:"values"`
 }
