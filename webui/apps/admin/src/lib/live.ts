@@ -8,6 +8,7 @@ export type ConnState = 'idle' | 'connecting' | 'open' | 'down'
 const TOPIC_OVERVIEW = 'overview.snapshot'
 const TOPIC_JOBS = 'jobs.list'
 const TOPIC_LOG = 'log.entry'
+const TOPIC_INBOX = 'inbox.message'
 
 interface Envelope {
   topic: string
@@ -140,6 +141,10 @@ function dispatch(envelope: Envelope) {
       for (const listener of logListeners) listener(entry)
       break
     }
+    case TOPIC_INBOX:
+      // 新消息已入库: 会话列表和当前会话自己重拉, 不必等那 30 秒轮询。
+      void queryClient.invalidateQueries({ queryKey: ['inbox'] })
+      break
   }
 }
 

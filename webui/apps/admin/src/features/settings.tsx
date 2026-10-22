@@ -54,6 +54,17 @@ function widget(field: CoreField, value: unknown, onChange: (next: unknown) => v
       )
     case 'multiselect':
       return <MultiSelect options={field.options ?? []} value={toList(value)} onChange={onChange} />
+    case 'textarea':
+      // 整段文本原样保存: 换行是内容的一部分, 不能像 textlist 那样按行拆成候选
+      return (
+        <Textarea
+          rows={6}
+          className="font-mono text-sm"
+          placeholder={field.placeholder}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )
     case 'textlist':
       // 多行自由编辑: 数组 ↔ 按行拆分的文本; 空行交给后端 trim 后丢弃
       return (
@@ -164,7 +175,11 @@ export default function SettingsPage() {
               htmlFor={`core-${field.key}`}
               hint={field.desc}
               badge={<HotBadge hot={field.hot} />}
-              className={field.kind === 'multiselect' || field.kind === 'textlist' ? 'md:col-span-2' : undefined}
+              className={
+                field.kind === 'multiselect' || field.kind === 'textlist' || field.kind === 'textarea'
+                  ? 'md:col-span-2'
+                  : undefined
+              }
             >
               {widget(
                 field,

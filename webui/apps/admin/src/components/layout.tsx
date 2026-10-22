@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   LogOut,
+  MessagesSquare,
   Package,
   ScrollText,
   SlidersHorizontal,
@@ -26,6 +27,7 @@ export type OverviewData = Overview & { now?: number }
 const NAV = [
   { to: '/overview', label: '概览', icon: LayoutGrid },
   { to: '/logs', label: '日志', icon: ScrollText },
+  { to: '/messages', label: '消息', icon: MessagesSquare },
   { to: '/menu', label: '指令面板', icon: Command },
   { to: '/plugins', label: '插件', icon: Package },
   { to: '/assets', label: '图床', icon: ImageIcon },
@@ -187,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="relative min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-6 px-8 pb-16 pt-8">{children}</div>
       </main>
     </div>

@@ -36,6 +36,9 @@ type Plugin struct {
 	Config         []ConfigField
 	ValidateConfig func(map[string]any) error
 	ApplyConfig    func(map[string]any) error
+	// OnConfigApplied 在配置真正生效之后调用(启动加载与面板保存都算)，用来打「生效后」的启动摘要:
+	// init() 里读到的永远只有出厂默认值，要按真实配置说话只能挂在这里。
+	OnConfigApplied func()
 	// TemplateFS 插件自带 markdown 模板, 目录约定 templates/markdown/*.md。
 	TemplateFS fs.FS
 
@@ -68,6 +71,10 @@ type ConfigField struct {
 }
 
 type ShowIf struct {
-	Key    string   `json:"key"`
-	Values []string `json:"values"`
+	Key    string   `json:"key,omitempty"`
+	Values []string `json:"values,omitempty"`
+
+	// Any 是「任一成立就显示」的分支: 同一个平台被文字和图片分别选中时,
+	// 那套参数要能在两种情况下都出现, 单条件表达不了。
+	Any []ShowIf `json:"any,omitempty"`
 }

@@ -139,8 +139,10 @@ export interface ControlView {
 export type LiveOverview = Overview & { now: number }
 
 export interface PluginShowIf {
-  key: string
-  values: string[]
+  key?: string
+  values?: string[]
+  /** 任一子条件成立即显示, 用于同一平台被两个维度分别选中时共用参数。 */
+  any?: PluginShowIf[]
 }
 
 export interface PluginField {

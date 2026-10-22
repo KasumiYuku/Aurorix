@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Spinner } from '@aurorix/webui'
@@ -12,6 +12,7 @@ import JobsPage from './features/jobs'
 import LoginPage from './features/login'
 import LogsPage from './features/logs'
 import MenuPage from './features/menu'
+const MessagesPage = lazy(() => import('./features/messages'))
 import OverviewPage from './features/overview'
 import PluginsPage from './features/plugins'
 import SettingsPage from './features/settings'
@@ -66,6 +67,14 @@ export default function App() {
           <Route index element={<Navigate to="/overview" replace />} />
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route
+            path="/messages"
+            element={
+              <Suspense fallback={<Splash />}>
+                <MessagesPage />
+              </Suspense>
+            }
+          />
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/plugins" element={<PluginsPage />} />
           <Route path="/assets" element={<AssetsPage />} />

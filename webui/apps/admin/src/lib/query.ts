@@ -24,4 +24,6 @@ export const qk = {
   menu: ['menu', 'panels'] as const,
   menuMeta: ['menu', 'meta'] as const,
   menuSnapshots: ['menu', 'snapshots'] as const,
+  inboxConversations: ['inbox', 'conversations'] as const,
+  inboxMessages: (conv: string) => ['inbox', 'messages', conv] as const,
 }

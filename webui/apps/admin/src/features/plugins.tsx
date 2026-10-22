@@ -21,7 +21,7 @@ import { PageHeader } from '../components/layout'
 import { get, put } from '../lib/api'
 import { qk, queryClient } from '../lib/query'
 import { toast } from '../lib/toast'
-import type { AccessConfig, AccessRule, ManagedPlugin, OkResult, PluginField } from '../lib/types'
+import type { AccessConfig, AccessRule, ManagedPlugin, OkResult, PluginField, PluginShowIf } from '../lib/types'
 
 const MODE_OPTIONS = [
   { value: 'off', label: '不限制' },
@@ -66,11 +66,18 @@ function AccessRuleEditor({
 }
 
 // 依赖字段缺省时按可见处理, 免得配置快照不全时整块表单消失。
+function ruleMatches(rule: PluginShowIf, values: Record<string, unknown>): boolean {
+  if (!rule.key) return true
+  if (!(rule.key in values)) return true
+  const current = values[rule.key]
+  return (rule.values ?? []).includes(typeof current === 'string' ? current : '')
+}
+
 function fieldVisible(field: PluginField, values: Record<string, unknown>): boolean {
-  if (!field.show_if) return true
-  if (!(field.show_if.key in values)) return true
-  const current = values[field.show_if.key]
-  return field.show_if.values.includes(typeof current === 'string' ? current : '')
+  const rule = field.show_if
+  if (!rule) return true
+  if (rule.any && rule.any.length > 0) return rule.any.some((one) => ruleMatches(one, values))
+  return ruleMatches(rule, values)
 }
 
 function fieldInput(field: PluginField, value: unknown, onChange: (next: unknown) => void) {
