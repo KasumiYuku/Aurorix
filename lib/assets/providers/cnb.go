@@ -52,6 +52,11 @@ type cnbProvider struct {
 
 func (p *cnbProvider) Name() string { return "cnb" }
 
+// Kinds 声明能吃视频: 它按仓库文件落盘, 实测 12MB 上传与回读都正常。
+func (p *cnbProvider) Kinds() assets.MediaKind { return assets.KindImage | assets.KindVideo }
+
+func (p *cnbProvider) MaxSize(assets.MediaKind) int64 { return 0 }
+
 type cnbUploadInfo struct {
 	UploadURL string            `json:"upload_url"`
 	Token     string            `json:"token"`

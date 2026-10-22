@@ -39,10 +39,21 @@ var coreSpecs = []coreField{
 	{Key: "admin_password", Label: "管理密码", Desc: "留空保持原值; 修改后现有会话立即失效", Kind: "secret", Hot: true},
 	{Key: "log_level", Label: "控制台日志级别", Kind: "select", Options: []string{"debug", "info", "warn", "error"}, Hot: true},
 	{Key: "global_markdown", Label: "全局 Markdown 回复", Kind: "bool", Hot: true},
+	{Key: "image_limits_enabled", Label: "限制 Markdown 图片尺寸", Desc: "开: 正文里每张 markdown 图片宽度顶到上限、高度按比例算出后封顶, 只缩不放; 超长图会被压进框里(比例会走样, 点开仍是原图), 换来的是一屏装得下、不再刷屏。关: 原样发出。**省略即开启**", Kind: "bool", Hot: true},
+	{Key: "image_max_width", Label: "图片最大宽度(px)", Desc: "聊天气泡宽度; 350 约等于主流手机满宽, 小于它的图不放大。只能填 16..4096, 留空用默认值", Placeholder: "350", Kind: "number", Hot: true},
+	{Key: "image_max_height", Label: "图片最大高度(px)", Desc: "单张图在聊天窗里最多占多高; 高度超了就截到这个值, 宽度照样顶满。只能填 16..4096, 留空用默认值", Placeholder: "438", Kind: "number", Hot: true},
 	{Key: "retry_when", Label: "消息重试错误码", Desc: "每行一个业务错误码", Kind: "intlist", Hot: true},
 	{Key: "upload_threshold", Label: "分片上传阈值(字节)", Kind: "number", Hot: true},
 	{Key: "footer_buttons_enabled", Label: "启用底部按钮", Desc: "关掉后保留下面的配置, 但不再往消息里追加", Kind: "bool", Hot: true},
-	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的底部按钮。一行 = 键盘上一行, 同一行用逗号分隔多个按钮; 每个按钮写 标签|类型|参数, 类型有 counter(计数)/command(指令)/link(链接)/repeat(复读: 把触发这条回复的原消息填进用户输入框)/image(图片: 点击把那一段 URL 的图发出来), 选项跟在参数后: ; k=v", Placeholder: "+1 | repeat , 文档 | link | https://github.com/KasumiYuku/Aurorix\n帮助 | command | /help", Kind: "textlist", Hot: true},
+	{Key: "footer_buttons", Label: "底部按钮", Desc: "每个 Markdown 消息末尾追加的底部按钮。一行 = 键盘上一行, 同一行用逗号分隔多个按钮; 每个按钮写 标签|类型|参数, 类型有 counter(计数)/command(指令)/link(链接)/repeat(复读: 把触发这条回复的原消息填进用户输入框)/image(图片: 点击把那一段 URL 的图发出来)/callback(回调: 点击转给参数里那个回调 id, 发什么由注册它的插件决定), 选项跟在参数后: ; k=v。style 可选 0 灰线 / 1 蓝线 / 2 灰底 / 3 蓝底 / 4 文字(不写就是这个)", Placeholder: "+1 | repeat , 文档 | link | https://github.com/KasumiYuku/Aurorix\n帮助 | command | /help ; style=1", Kind: "textlist", Hot: true},
+	{Key: "welcome_enabled", Label: "新人进群欢迎", Desc: "收到新人进群事件时发欢迎。能用事件 ID 被动回复, 不占主动消息额度、不受群授权限制。", Kind: "bool", Hot: true},
+	{Key: "welcome_messages", Label: "新人进群文案", Desc: "一行一个候选, 发送时随机挑一行; 留空则不发。消息第一行是 ## + 圆形头像 + @进群成员, 文案从第二行开始。", Placeholder: "欢迎来到这里，请随意一点，也请温柔一点。\n欢迎加入，愿你在这里玩得开心。", Kind: "textlist", Hot: true},
+	{Key: "farewell_enabled", Label: "成员退群提示", Desc: "收到成员退群事件时发提示。退群不支持被动回复, 只能主动推送; 群需开启「允许主动消息」才会发出。", Kind: "bool", Hot: true},
+	{Key: "farewell_messages", Label: "成员退群文案", Desc: "一行一个候选; 留空则不发。退群的人已不在群里、@ 解析不到, 所以只有头像 + 文案。", Placeholder: "有人离开了群聊，祝之后一切顺利。\n短暂同行也很好，下次有缘再见。", Kind: "textlist", Hot: true},
+	{Key: "welcome_extra", Label: "新人进群附加内容", Desc: "原样追加在欢迎文案后面, 支持换行、引用块(行首写 >)和内联指令标签。标签里的指令照人话写, 平台要求的 urlencode 由框架代劳 —— 自己先编一遍反而会双重编码。留空则不加", Placeholder: "> <qqbot-cmd-input text=\"/p\" show=\"pgr菜单\" /> <qqbot-cmd-input text=\"/a\" show=\"arc菜单\" />", Kind: "textarea", Hot: true},
+	{Key: "welcome_buttons", Label: "新人进群底部按钮", Desc: "语法与上面「底部按钮」完全一致; 只挂在这条欢迎消息上, 不跟全局按钮混, 计数也各算各的。留空则不挂键盘", Placeholder: "帮助 | command | /help ; style=1", Kind: "textlist", Hot: true},
+	{Key: "farewell_extra", Label: "成员退群附加内容", Desc: "同「新人进群附加内容」, 追加在退群文案后面, 同样不用自己编码。留空则不加", Kind: "textarea", Hot: true},
+	{Key: "farewell_buttons", Label: "成员退群底部按钮", Desc: "语法同「底部按钮」; 只挂在这条退群提示上。留空则不挂键盘", Kind: "textlist", Hot: true},
 }
 
 func handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +95,12 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 		field.Value = cfg.LogLevel
 	case "global_markdown":
 		field.Value = cfg.GlobalMarkdown
+	case "image_limits_enabled":
+		field.Value = cfg.ImageBox().On()
+	case "image_max_width":
+		field.Value = cfg.ImageMaxWidth
+	case "image_max_height":
+		field.Value = cfg.ImageMaxHeight
 	case "retry_when":
 		field.Value = cfg.RetryWhen
 	case "upload_threshold":
@@ -93,6 +110,22 @@ func applyCoreValue(field *coreField, cfg config.AppConfig) {
 	case "footer_buttons_enabled":
 		// 开关省略时视为启用, 所以 nil 在这里也要显示成打开
 		field.Value = cfg.FooterEnabled()
+	case "welcome_enabled":
+		field.Value = cfg.WelcomeOn()
+	case "welcome_messages":
+		field.Value = cfg.WelcomeMessages
+	case "farewell_enabled":
+		field.Value = cfg.FarewellOn()
+	case "farewell_messages":
+		field.Value = cfg.FarewellMessages
+	case "welcome_extra":
+		field.Value = cfg.WelcomeExtra
+	case "welcome_buttons":
+		field.Value = cfg.WelcomeButtons
+	case "farewell_extra":
+		field.Value = cfg.FarewellExtra
+	case "farewell_buttons":
+		field.Value = cfg.FarewellButtons
 	}
 }
 
@@ -191,6 +224,9 @@ func handlePutConfig(deps Deps) http.HandlerFunc {
 		next := config.Current()
 		if deps.Client != nil && hasAny(hotChanged, "global_markdown", "retry_when", "upload_threshold") {
 			deps.Client.SetMessageOptions(next.GlobalMarkdown, next.RetryWhen, next.UploadThreshold)
+		}
+		if deps.Client != nil {
+			deps.Client.SetImageBox(next.ImageBox())
 		}
 		if hasAny(hotChanged, "log_level") {
 			logx.SetConsoleLevel(next.LogLevel)

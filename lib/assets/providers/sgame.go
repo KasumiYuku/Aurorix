@@ -37,6 +37,11 @@ type sgameProvider struct {
 
 func (p *sgameProvider) Name() string { return "sgame" }
 
+// Kinds 声明能吃视频: 它就是往 COS 丢字节, 服务端按 MIME 回 Content-Type, 实测 12MB 正常。
+func (p *sgameProvider) Kinds() assets.MediaKind { return assets.KindImage | assets.KindVideo }
+
+func (p *sgameProvider) MaxSize(assets.MediaKind) int64 { return 0 }
+
 func (p *sgameProvider) Upload(ctx context.Context, in assets.ProviderInput) (string, error) {
 	ext := mimeExt(in.MimeType)
 	fileName := fmt.Sprintf("img_%d.%s", time.Now().UnixMilli(), ext)

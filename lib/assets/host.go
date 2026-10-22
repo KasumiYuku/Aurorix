@@ -361,7 +361,7 @@ func (h *ImageHost) upload(input ProviderInput) (string, string, bool, error) {
 
 // uploadTo 只试 candidates 挑出来的图床。
 func (h *ImageHost) uploadTo(input ProviderInput, provider string) (string, string, bool, error) {
-	providers, err := h.candidates(provider)
+	providers, err := h.candidatesFor(input, provider)
 	if err != nil {
 		return "", "", false, err
 	}
@@ -390,7 +390,7 @@ func (h *ImageHost) uploadTo(input ProviderInput, provider string) (string, stri
 			if resolved != "" {
 				url = resolved
 			}
-			if headOK && !isImageContentType(ct) {
+			if headOK && !contentTypeMatches(input.Kind, ct) {
 				logAssets.Warnf("图床 Content-Type 不匹配, 视为失败: provider=%s, %s, url=%s, content-type=%q, 上传=%s, 探测=%s",
 					p.Name(), desc, url, ct,
 					upCost.Round(time.Millisecond), probeCost.Round(time.Millisecond))
@@ -499,4 +499,91 @@ func isImageContentType(ct string) bool {
 		ct = strings.TrimSpace(ct[:i])
 	}
 	return strings.HasPrefix(ct, "image/")
+}
+
+// contentTypeMatches 按媒体大类校验响应 Content-Type。
+func contentTypeMatches(kind MediaKind, ct string) bool {
+	ct = strings.TrimSpace(strings.ToLower(ct))
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	switch kind {
+	case KindVideo:
+		return strings.HasPrefix(ct, "video/")
+	case KindAudio:
+		return strings.HasPrefix(ct, "audio/")
+	default:
+		return strings.HasPrefix(ct, "image/")
+	}
+}
+
+// asMedia 让没声明能力的图床按"只收图片、不限大小"参与调度。
+func asMedia(p ImageProvider) MediaProvider {
+	if mp, ok := p.(MediaProvider); ok {
+		return mp
+	}
+	return imageOnly{p}
+}
+
+type imageOnly struct{ ImageProvider }
+
+func (imageOnly) Kinds() MediaKind        { return KindImage }
+func (imageOnly) MaxSize(MediaKind) int64 { return 0 }
+
+// candidatesFor 按媒体大类与大小上限筛出可用的图床; 指定了名字就只试它。
+func (h *ImageHost) candidatesFor(input ProviderInput, provider string) ([]ImageProvider, error) {
+	all, err := h.candidates(provider)
+	if err != nil {
+		return nil, err
+	}
+	kind := input.Kind
+	if kind == 0 {
+		kind = KindImage
+	}
+	size := int64(len(input.Buffer))
+	out := make([]ImageProvider, 0, len(all))
+	for _, p := range all {
+		mp := asMedia(p)
+		if !mp.Kinds().Has(kind) {
+			continue
+		}
+		if limit := mp.MaxSize(kind); limit > 0 && size > limit {
+			logAssets.Warnf("图床 %s 收不下 %v(%d 字节 > 上限 %d), 跳过", p.Name(), kind, size, limit)
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("没有图床能接收 %v 类型(%d 字节)", kind, size)
+	}
+	return out, nil
+}
+
+// ResolveMedia 把任意媒体转成公网 URL; 候选图床按 kind 与各自大小上限筛。
+func (h *ImageHost) ResolveMedia(src any, kind MediaKind, opt UploadOptions) (ResolvedMedia, error) {
+	in, err := Decode(src)
+	if err != nil {
+		return ResolvedMedia{}, err
+	}
+	if in.URL != "" {
+		return ResolvedMedia{URL: in.URL, Kind: kind}, nil
+	}
+	mime := in.MimeType
+	if mime == "" {
+		mime = ProbeMediaMime(in.Data)
+	}
+	filename := in.Filename
+	if filename == "" || !hasExt(filename) {
+		if ext := mediaExt(mime); ext != "" {
+			filename = "media." + ext
+		}
+	}
+	url, provider, _, err := h.uploadTo(ProviderInput{
+		Buffer: in.Data, Filename: filename, MimeType: mime, Kind: kind,
+		Origin: "内存字节", GroupID: opt.GroupID, UserID: opt.UserID,
+	}, opt.Provider)
+	if err != nil {
+		return ResolvedMedia{}, err
+	}
+	return ResolvedMedia{URL: url, Provider: provider, Kind: kind}, nil
 }

@@ -27,6 +27,7 @@ type BotAPI struct {
 	GlobalMarkdown  bool
 	RetryWhen       []int
 	UploadThreshold int
+	ImageBox        images.Box
 
 	Tokens *token.Store
 
@@ -61,12 +62,23 @@ func Init(appID, appSecret, proxy string, req *requests.Client) *BotAPI {
 // SetAssets 注入图床聚合器 (config 热更回调)。
 func (c *BotAPI) SetAssets(h *assets.ImageHost) { c.Assets = h }
 
+// Threshold 是分片直传的字节阈值; 未配置时给默认值。媒体层也拿它判断"值不值得先换直链"。
+func (c *BotAPI) Threshold() int {
+	if c.UploadThreshold > 0 {
+		return c.UploadThreshold
+	}
+	return constant.DefaultUploadThreshold
+}
+
 // SetMessageOptions 注入消息管道配置 (config 热更回调)。
 func (c *BotAPI) SetMessageOptions(globalMarkdown bool, retryWhen []int, uploadThreshold int) {
 	c.GlobalMarkdown = globalMarkdown
 	c.RetryWhen = retryWhen
 	c.UploadThreshold = uploadThreshold
 }
+
+// SetImageBox 注入 markdown 图片显示上限 (config 热更回调)。
+func (c *BotAPI) SetImageBox(box images.Box) { c.ImageBox = box }
 
 // AccessToken 供外部使用 (如 WebSocket 鉴权)。
 func (c *BotAPI) AccessToken() (string, error) {
@@ -132,7 +144,7 @@ func (c *BotAPI) UploadOfficialImage(in assets.ProviderInput) (assets.ResolvedIm
 		}
 	}
 	res, err := c.Files.UploadMediaEx(target, groupID, userID, MediaUpload{
-		FileType: 1, Data: in.Buffer, Filename: name, MimeType: mimeType, ForceChunked: true,
+		FileType: constant.MediaImage, Data: in.Buffer, Filename: name, MimeType: mimeType, ForceChunked: true,
 	})
 	if err != nil {
 		return assets.ResolvedImage{}, err

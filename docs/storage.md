@@ -80,3 +80,11 @@ func remember(ctx *context.MessageContext) error {
 	return ctx.Text(fmt.Sprintf("第 %d 次", count)).Send()
 }
 ```
+
+## 管理台统计的落库语义
+
+群 / 私聊 / 每日计数在内存累加，后台协程每 5 秒把**变动过的那几行**按增量写库一次（`msg_count = msg_count + ?`，不是整表重写）。
+
+- 消息热路径不碰数据库：单条消息的开销是内存自增加一次脏标记
+- 落库失败时增量原样退回内存，下一轮重试，不丢也不重
+- 正常退出时 `stats.Stop()` 同步落完最后一批；进程被强杀最多丢最后一个 5 秒窗口的计数

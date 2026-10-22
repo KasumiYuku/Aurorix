@@ -211,7 +211,6 @@ func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 		ctx := &context.CallbackContext{}
 		ctx.Init(payload.ID, client)
 		ctx.InteractionID = payload.Data.Id
-		ctx.MessageID = payload.Data.Id
 		ctx.ButtonId = payload.Data.Callback.Resolved.ButtonId
 		ctx.Data = payload.Data.Callback.Resolved.ButtonData
 		if structers.InteractionIsPrivate(payload.Data.ChatType, string(payload.Data.Scene)) {
@@ -226,7 +225,8 @@ func ProcessPayload(payload structers.Payload, client *api.BotAPI) {
 		}
 		callbackFunc, ok := buttons.GetCallbackFunc(ctx.ButtonId)
 		if !ok {
-			messageLog.Infof("回调按钮: %v未注册回调函数, 已回执交互", ctx.ButtonId)
+			// 把按钮数据一起打出来: 平台偶尔回一个空 button_id, 只打 id 的话下次还是查不出是哪个按钮。
+			messageLog.Warnf("回调按钮: id=%q 未注册回调函数, 已回执交互 (data=%q 交互=%s)", ctx.ButtonId, ctx.Data, ctx.InteractionID)
 			return
 		}
 		pool.Go(func() { callbackHandleFunc(callbackFunc, ctx) })

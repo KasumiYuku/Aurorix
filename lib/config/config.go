@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/images"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 	"github.com/KasumiYuku/Aurorix/lib/utils"
 	"net"
@@ -31,8 +32,19 @@ type AppConfig struct {
 	GlobalMarkdown       bool                      `json:"global_markdown,omitempty"`
 	FooterButtons        []string                  `json:"footer_buttons,omitempty"`
 	FooterButtonsEnabled *bool                     `json:"footer_buttons_enabled,omitempty"`
+	WelcomeEnabled       *bool                     `json:"welcome_enabled,omitempty"`
+	WelcomeMessages      []string                  `json:"welcome_messages,omitempty"`
+	FarewellEnabled      *bool                     `json:"farewell_enabled,omitempty"`
+	FarewellMessages     []string                  `json:"farewell_messages,omitempty"`
+	WelcomeExtra         string                    `json:"welcome_extra,omitempty"`
+	WelcomeButtons       []string                  `json:"welcome_buttons,omitempty"`
+	FarewellExtra        string                    `json:"farewell_extra,omitempty"`
+	FarewellButtons      []string                  `json:"farewell_buttons,omitempty"`
 	RetryWhen            []int                     `json:"retry_when,omitempty"`
 	UploadThreshold      int                       `json:"upload_threshold,omitempty"`
+	ImageLimitsEnabled   *bool                     `json:"image_limits_enabled,omitempty"`
+	ImageMaxWidth        int                       `json:"image_max_width,omitempty"`
+	ImageMaxHeight       int                       `json:"image_max_height,omitempty"`
 	LogLevel             string                    `json:"log_level,omitempty"`
 	Prefixes             []string                  `json:"prefixes,omitempty"`
 	MemoryLimitMB        int                       `json:"memory_limit_mb,omitempty"`
@@ -110,7 +122,13 @@ func normalize(cfg *AppConfig) {
 	}
 	cfg.GatewayURL = strings.TrimSpace(cfg.GatewayURL)
 	if cfg.UploadThreshold == 0 {
-		cfg.UploadThreshold = 3 << 20
+		cfg.UploadThreshold = constant.DefaultUploadThreshold
+	}
+	if cfg.ImageMaxWidth <= 0 || cfg.ImageMaxWidth > maxImageSide {
+		cfg.ImageMaxWidth = constant.DefaultImageMaxWidth
+	}
+	if cfg.ImageMaxHeight <= 0 || cfg.ImageMaxHeight > maxImageSide {
+		cfg.ImageMaxHeight = constant.DefaultImageMaxHeight
 	}
 	if cfg.ProxyAPI == "" {
 		cfg.ProxyAPI = "https://api.bot.qq.com"
@@ -333,6 +351,24 @@ func applyCoreKey(cfg *AppConfig, key string, rawValue json.RawMessage) error {
 			return errors.New("upload_threshold 必须大于 0")
 		}
 		cfg.UploadThreshold = v
+	case "image_limits_enabled":
+		var v bool
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("image_limits_enabled: %w", err)
+		}
+		cfg.ImageLimitsEnabled = &v
+	case "image_max_width":
+		v, err := imageSide(rawValue)
+		if err != nil {
+			return fmt.Errorf("image_max_width: %w", err)
+		}
+		cfg.ImageMaxWidth = v
+	case "image_max_height":
+		v, err := imageSide(rawValue)
+		if err != nil {
+			return fmt.Errorf("image_max_height: %w", err)
+		}
+		cfg.ImageMaxHeight = v
 	case "log_level":
 		var v string
 		if err := json.Unmarshal(rawValue, &v); err != nil {
@@ -354,6 +390,68 @@ func applyCoreKey(cfg *AppConfig, key string, rawValue json.RawMessage) error {
 			return fmt.Errorf("footer_buttons_enabled: %w", err)
 		}
 		cfg.FooterButtonsEnabled = &v
+	case "welcome_enabled":
+		var v bool
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("welcome_enabled: %w", err)
+		}
+		cfg.WelcomeEnabled = &v
+	case "welcome_messages":
+		var v []string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("welcome_messages: %w", err)
+		}
+		lines := cleanStrings(v)
+		if err := validateCmdTexts("welcome_messages", lines); err != nil {
+			return err
+		}
+		cfg.WelcomeMessages = lines
+	case "farewell_enabled":
+		var v bool
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("farewell_enabled: %w", err)
+		}
+		cfg.FarewellEnabled = &v
+	case "farewell_messages":
+		var v []string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("farewell_messages: %w", err)
+		}
+		lines := cleanStrings(v)
+		if err := validateCmdTexts("farewell_messages", lines); err != nil {
+			return err
+		}
+		cfg.FarewellMessages = lines
+	case "welcome_extra":
+		var v string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("welcome_extra: %w", err)
+		}
+		if err := ValidateCmdTags("welcome_extra", v); err != nil {
+			return err
+		}
+		cfg.WelcomeExtra = strings.TrimSpace(v)
+	case "welcome_buttons":
+		var v []string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("welcome_buttons: %w", err)
+		}
+		cfg.WelcomeButtons = cleanStrings(v)
+	case "farewell_extra":
+		var v string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("farewell_extra: %w", err)
+		}
+		if err := ValidateCmdTags("farewell_extra", v); err != nil {
+			return err
+		}
+		cfg.FarewellExtra = strings.TrimSpace(v)
+	case "farewell_buttons":
+		var v []string
+		if err := json.Unmarshal(rawValue, &v); err != nil {
+			return fmt.Errorf("farewell_buttons: %w", err)
+		}
+		cfg.FarewellButtons = cleanStrings(v)
 	default:
 		return fmt.Errorf("%w: %s", errCoreUnknownKey, key)
 	}
@@ -375,4 +473,36 @@ func cleanStrings(values []string) []string {
 // 显式写 false 才是「静音但保留配置」。
 func (cfg AppConfig) FooterEnabled() bool {
 	return cfg.FooterButtonsEnabled == nil || *cfg.FooterButtonsEnabled
+}
+
+// WelcomeOn 报告入群欢迎是否启用; 开关省略时视为启用, 但文案为空照样不发。
+func (cfg AppConfig) WelcomeOn() bool {
+	return cfg.WelcomeEnabled == nil || *cfg.WelcomeEnabled
+}
+
+// FarewellOn 报告退群提示是否启用。
+func (cfg AppConfig) FarewellOn() bool {
+	return cfg.FarewellEnabled == nil || *cfg.FarewellEnabled
+}
+
+const maxImageSide = 4096
+
+// imageSide 解析图片边长: 只收 16..maxImageSide 之间的整数。
+func imageSide(rawValue json.RawMessage) (int, error) {
+	var v int
+	if err := json.Unmarshal(rawValue, &v); err != nil {
+		return 0, err
+	}
+	if v < 16 || v > maxImageSide {
+		return 0, fmt.Errorf("需在 16..%d 之间", maxImageSide)
+	}
+	return v, nil
+}
+
+// ImageBox 报告 markdown 图片的显示上限; 开关省略时视为开启, 与底部按钮同一个约定。
+func (cfg AppConfig) ImageBox() images.Box {
+	if cfg.ImageLimitsEnabled != nil && !*cfg.ImageLimitsEnabled {
+		return images.Box{}
+	}
+	return images.Box{Width: cfg.ImageMaxWidth, Height: cfg.ImageMaxHeight}
 }

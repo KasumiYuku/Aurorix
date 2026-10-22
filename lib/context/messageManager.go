@@ -4,6 +4,7 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/api"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"github.com/KasumiYuku/Aurorix/lib/message"
+	"github.com/KasumiYuku/Aurorix/lib/structers"
 	"github.com/KasumiYuku/Aurorix/lib/templates"
 )
 
@@ -77,9 +78,7 @@ func (manager *MessageManager) Markdown(content string) *message.MarkdownMessage
 	}
 	msg.Init()
 	msg.Type = constant.Markdown
-	msg.Markdown = templates.Markdown{
-		Content: content,
-	}
+	msg.Content(content)
 	if manager.Qapi != nil {
 		msg.SetAssets(manager.Qapi.Assets)
 	}
@@ -125,6 +124,28 @@ func (manager *MessageManager) AtAll(newline ...bool) *message.AtMessage {
 		Newline: len(newline) > 0 && newline[0],
 	}
 	msg.Type = constant.PlainText
+	return msg
+}
+
+// 头像抓取尺寸与显示尺寸分开: 抓大一点客户端才不会糊, 显示多大由 markdown 自己决定。
+const (
+	avatarFetchPx = 140
+	avatarShowPx  = 30
+)
+
+// AtAvatar 构造"带头像的艾特": 引用块里的标题行, 头像在前、艾特在后。
+// px 是头像在消息里显示的边长, 不传按 30。
+func (manager *MessageManager) AtAvatar(openid string, px ...int) *message.AtMessage {
+	msg := manager.AtQuote(openid)
+	msg.Newline = true
+	msg.AvatarPx = avatarShowPx
+	if len(px) > 0 && px[0] > 0 {
+		msg.AvatarPx = px[0]
+	}
+	if manager.Qapi != nil && manager.Qapi.AppID != "" {
+		msg.AvatarURL = structers.AvatarURLSize(manager.Qapi.AppID, openid, avatarFetchPx)
+		msg.Heading = 3
+	}
 	return msg
 }
 

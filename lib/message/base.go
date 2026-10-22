@@ -228,14 +228,19 @@ func (msg *Message) sendOnce(initiative bool) (string, error) {
 		panic("QQAPI Clinet空指针异常")
 	}
 
+	var id string
 	switch msg.Target {
 	case constant.GroupMessage:
-		return msg.Qapi.SendGroupMessageID(data, msg.GroupId)
+		id, err = msg.Qapi.SendGroupMessageID(data, msg.GroupId)
 	case constant.PrivateMessage:
-		return msg.Qapi.SendPrivateMessageID(data, msg.UserId)
+		id, err = msg.Qapi.SendPrivateMessageID(data, msg.UserId)
 	default:
 		return "", fmt.Errorf("Unknown message target type: %v", msg.Target)
 	}
+	if err == nil {
+		observeSent(msg, id)
+	}
+	return id, err
 }
 
 // 设置为主动推送消息

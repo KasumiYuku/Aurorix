@@ -10,11 +10,13 @@ import (
 
 // MessageEvent 群/私聊消息事件公共视图。Content 为清洗后文本, RawContent 为原文。
 type MessageEvent struct {
-	eventType   constant.EventType
-	EventID     string
-	MessageID   string
-	GroupID     string
-	UserID      string
+	eventType constant.EventType
+	EventID   string
+	MessageID string
+	GroupID   string
+	UserID    string
+	// Username 说话人昵称。平台只在部分事件里给(群消息有, 早期版本没有), 空串表示没给。
+	Username    string
 	Origin      constant.MessageOrigin
 	Content     string
 	RawContent  string

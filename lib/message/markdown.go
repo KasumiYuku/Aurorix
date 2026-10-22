@@ -79,11 +79,13 @@ func (msg *MarkdownMessage) Init() {
 
 func (*MarkdownMessage) part() {}
 
-// Prepare 实现 contract.PreSend：发送前处理 @ 保护 + 图片内嵌（若有图床）。
+// Prepare 实现 contract.PreSend：发送前处理 @ 保护、图片内嵌（若有图床）与指令标签编码。
+// 每次 Send 都会走一遍(重试也算), 所以这里每一步都必须幂等。
 func (msg *MarkdownMessage) Prepare() {
 	content := ProtectMarkdownAt(msg.Markdown.Content)
 	if msg.assets != nil {
 		content = msg.assets.ProcessMarkdownTo(content, msg.GroupId, msg.UserId)
 	}
-	msg.Markdown.Content = content
+	content = msg.fitImages(content)
+	msg.Markdown.Content = encodeCmdTagAttrs(content)
 }

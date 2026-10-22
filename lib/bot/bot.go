@@ -17,8 +17,10 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/config"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"github.com/KasumiYuku/Aurorix/lib/gateway"
+	"github.com/KasumiYuku/Aurorix/lib/inbox"
 	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"github.com/KasumiYuku/Aurorix/lib/middleware"
+	"github.com/KasumiYuku/Aurorix/lib/notice"
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"github.com/KasumiYuku/Aurorix/lib/push"
 	"github.com/KasumiYuku/Aurorix/lib/requests"
@@ -95,14 +97,19 @@ func Run() {
 	assets.SetOfficialUpload(client.UploadOfficialImage)
 
 	assetsManager := assets.NewManager(assets.NewClient(30))
-	assetsManager.OnReload(client.SetAssets)
+	assetsManager.OnReload(func(h *assets.ImageHost) {
+		client.SetAssets(h)
+		assets.Share(h)
+	})
 	if err := assetsManager.Load(); err != nil {
 		logger.Warnf("读取 assets.json 失败，使用空图床配置: %v", err)
 	}
+	assets.Share(assetsManager.Host())
 	if host := assetsManager.Host(); host.Size() > 0 {
 		logger.Infof("已启用图床聚合，provider 数量: %d", host.Size())
 	}
 	client.SetMessageOptions(appConfig.GlobalMarkdown, appConfig.RetryWhen, appConfig.UploadThreshold)
+	client.SetImageBox(appConfig.ImageBox())
 
 	// 框架级底部按钮: 每次发送时现读配置, 所以管理台改完立即生效(无需重启)。
 	// 开关关掉时只给空配置 —— 用户填的按钮原样留着, 只是不再追加。
@@ -113,6 +120,17 @@ func Run() {
 		}
 		return cfg.FooterButtons
 	})
+
+	// 进退群消息带自己的按钮, 与全局按钮分槽位, 点了不会串到别处的配置。
+	buttons.SetFooterSource(buttons.FooterNoticeWelcome, func() []string { return config.Current().WelcomeButtons })
+	buttons.SetFooterSource(buttons.FooterNoticeFarewell, func() []string { return config.Current().FarewellButtons })
+
+	// 框架级进退群通知: 文案和按钮都在管理台「设置」页, 停用插件后照常工作。
+	notice.Install()
+
+	// 消息存档: 收发两侧都落库, 管理台「消息」页读的就是它。存不了只告警, 不影响收发。
+	inboxStore := inbox.Install(client)
+	inbox.SetSavedHook(admin.PublishInbox)
 
 	push.Init(client)
 	schedule.Start(client)
@@ -142,6 +160,7 @@ func Run() {
 	admin.Register(mux, admin.Deps{
 		Assets:  assetsManager,
 		Client:  client,
+		Inbox:   inboxStore,
 		Profile: profile,
 		Gateway: func() any {
 			if gw != nil {

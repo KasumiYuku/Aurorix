@@ -10,6 +10,7 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"github.com/KasumiYuku/Aurorix/lib/requests"
 	"os"
+	"path"
 	"strconv"
 	"time"
 )
@@ -49,7 +50,7 @@ func (f *FilesAPI) UploadImage(target constant.MessageOrigin, groupID, userID, f
 	if err != nil {
 		return "", fmt.Errorf("read image for upload: %w", err)
 	}
-	return f.UploadMedia(target, groupID, userID, MediaUpload{FileType: 1, Data: data, Filename: filePath})
+	return f.UploadMedia(target, groupID, userID, MediaUpload{FileType: constant.MediaImage, Data: data, Filename: filePath})
 }
 
 // UploadMedia 上传媒体到 QQ, 返回 file_info。超过阈值自动分片上传。
@@ -63,10 +64,7 @@ func (f *FilesAPI) UploadMedia(target constant.MessageOrigin, groupID, userID st
 
 // UploadMediaEx 同 UploadMedia, 额外返回官方直链等字段。
 func (f *FilesAPI) UploadMediaEx(target constant.MessageOrigin, groupID, userID string, up MediaUpload) (MediaResult, error) {
-	threshold := f.api.UploadThreshold
-	if threshold <= 0 {
-		threshold = 3 << 20
-	}
+	threshold := f.api.Threshold()
 
 	var endpoint string
 	switch target {
@@ -130,6 +128,9 @@ func (f *FilesAPI) chunkedUpload(target constant.MessageOrigin, groupID, userID 
 		FileSize int    `json:"file_size"`
 		MD5      string `json:"md5"`
 		SHA1     string `json:"sha1"`
+		// MD5_10M 是前 10MB 的 md5: 官方用它做文件判重, 传过同一份就直接复用,
+		// 少了这个键 QQ 会把每次上传都当新文件重新处理(转码压画质)。
+		MD5_10M string `json:"md5_10m"`
 	}
 	var prep struct {
 		UploadID  string `json:"upload_id"`
@@ -140,8 +141,9 @@ func (f *FilesAPI) chunkedUpload(target constant.MessageOrigin, groupID, userID 
 		} `json:"parts"`
 	}
 	raw, err := f.api.doWithin("POST", prepEndpoint, requests.JSON(uploadPrepareRequest{
-		FileType: up.FileType, FileName: up.Filename, FileSize: len(up.Data),
+		FileType: up.FileType, FileName: mediaFileName(up.FileType, up.Filename), FileSize: len(up.Data),
 		MD5: md5HexBytes(up.Data), SHA1: sha1HexBytes(up.Data),
+		MD5_10M: md5HexBytes(headBytes(up.Data, md5HeadSize)),
 	}), uploadBudget(len(up.Data)))
 	if err != nil {
 		return MediaResult{}, fmt.Errorf("upload prepare: %w", err)
@@ -191,7 +193,7 @@ func (f *FilesAPI) chunkedUpload(target constant.MessageOrigin, groupID, userID 
 	}
 	var result mediaUploadResponse
 	raw, err = f.api.doWithin("POST", sendEndpoint, requests.JSON(sendFileRequest{
-		UploadID: prep.UploadID, FileType: up.FileType, FileName: up.Filename,
+		UploadID: prep.UploadID, FileType: up.FileType, FileName: mediaFileName(up.FileType, up.Filename),
 	}), uploadBudget(len(up.Data)))
 	if err != nil {
 		return MediaResult{}, fmt.Errorf("send chunked upload: %w", err)
@@ -258,4 +260,29 @@ func md5HexBytes(b []byte) string {
 func sha1HexBytes(b []byte) string {
 	sum := sha1.Sum(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// mediaFileName 给分片上传补扩展名: QQ 的 upload_prepare 按扩展名校验格式,
+// 只写 "video" 会回 40093004(上传内容违规)。直传路径不补 —— 带上 .mp4 会被当成标准视频转码压画质。
+func mediaFileName(fileType int, name string) string {
+	if name == "" || path.Ext(name) != "" {
+		return name
+	}
+	switch fileType {
+	case constant.MediaVideo:
+		return name + ".mp4"
+	case constant.MediaVoice:
+		return name + ".mp3"
+	}
+	return name
+}
+
+// md5HeadSize 是官方 md5_10m 的取样长度(10,002,432 字节, 约 9.54MB)。
+const md5HeadSize = 10_002_432
+
+func headBytes(data []byte, n int) []byte {
+	if len(data) <= n {
+		return data
+	}
+	return data[:n]
 }

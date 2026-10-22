@@ -104,7 +104,8 @@ func (h *scopeHandler) WithAttrs([]slog.Attr) slog.Handler       { return h }
 func (h *scopeHandler) WithGroup(string) slog.Handler            { return h }
 
 func (h *scopeHandler) Handle(_ context.Context, r slog.Record) error {
-	e := Entry{ID: int64(std.total.Add(1)), Time: r.Time.UnixMilli(), Level: r.Level.String(), Scope: h.scope, Msg: r.Message}
+	group, user := extractContext(r.Message)
+	e := Entry{ID: int64(std.total.Add(1)), Time: r.Time.UnixMilli(), Level: r.Level.String(), Scope: h.scope, Msg: r.Message, Group: group, User: user}
 	std.ring.push(e)
 	if r.Level >= slog.LevelError {
 		std.errors.Add(1)

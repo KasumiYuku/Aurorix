@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/KasumiYuku/Aurorix/lib/images"
 	"github.com/KasumiYuku/Aurorix/lib/requests"
 )
 
@@ -87,6 +88,7 @@ func (s *StreamSession) StreamID() string { return s.streamID }
 // SendContent 发送一段 markdown 内容。
 func (s *StreamSession) SendContent(content string, inputState StreamInputState) error {
 	s.index++
+	content = images.ClampMarkdown(content, s.client.ImageBox)
 	msg := StreamMessage{
 		InputMode:   StreamReplace,
 		InputState:  inputState,

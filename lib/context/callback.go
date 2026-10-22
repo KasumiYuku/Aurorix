@@ -5,10 +5,10 @@ import "github.com/KasumiYuku/Aurorix/lib/api"
 // 按钮回调上下文
 type CallbackContext struct {
 	*Context
-	Data          string
-	ButtonId      string
+	Data     string
+	ButtonId string
+	// InteractionID 平台交互 ID; 交互动事件不携带原消息 ID, 要撤回请用发消息时拿到的那个。
 	InteractionID string
-	MessageID     string
 }
 
 func (ctx *CallbackContext) Init(eventId string, client *api.BotAPI) {

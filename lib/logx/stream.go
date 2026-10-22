@@ -1,6 +1,7 @@
 package logx
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -12,6 +13,8 @@ type Entry struct {
 	Level string `json:"level"`
 	Scope string `json:"scope"`
 	Msg   string `json:"msg"`
+	Group string `json:"group,omitempty"`
+	User  string `json:"user,omitempty"`
 }
 
 // Filter 快照/接口侧过滤条件, 空字段表示不过滤。
@@ -19,6 +22,8 @@ type Filter struct {
 	MinLevel string
 	Scope    string
 	Text     string
+	Group    string
+	User     string
 }
 
 func (f Filter) matches(e Entry) bool {
@@ -33,6 +38,12 @@ func (f Filter) matches(e Entry) bool {
 		return false
 	}
 	if f.Text != "" && !strings.Contains(e.Msg, f.Text) {
+		return false
+	}
+	if f.Group != "" && f.Group != e.Group {
+		return false
+	}
+	if f.User != "" && f.User != e.User {
 		return false
 	}
 	return true
@@ -171,4 +182,42 @@ func (h *hub) broadcast(e Entry) {
 		default:
 		}
 	}
+}
+
+var contextFieldRe = regexp.MustCompile(`\b(group|user)=([^\s,;]+)`)
+
+// extractContext 从正文里认出 group=/user= —— 调用点本来就把它们写在消息里。
+func extractContext(msg string) (group, user string) {
+	for _, m := range contextFieldRe.FindAllStringSubmatch(msg, -1) {
+		switch m[1] {
+		case "group":
+			if group == "" {
+				group = m[2]
+			}
+		case "user":
+			if user == "" {
+				user = m[2]
+			}
+		}
+	}
+	return group, user
+}
+
+// Summary 按级别与来源数一遍缓冲, 给筛选条上的数字用。
+type Summary struct {
+	Levels map[string]int `json:"levels"`
+	Scopes map[string]int `json:"scopes"`
+}
+
+func Summarise() Summary { return std.ring.summarise() }
+
+func (r *ring) summarise() Summary {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := Summary{Levels: map[string]int{}, Scopes: map[string]int{}}
+	for _, e := range r.buf {
+		out.Levels[strings.ToLower(e.Level)]++
+		out.Scopes[e.Scope]++
+	}
+	return out
 }

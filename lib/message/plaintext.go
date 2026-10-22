@@ -25,6 +25,7 @@ func (msg *TextMessage) Marshal() ([]byte, error) {
 		if msg.Qapi != nil && msg.Qapi.Assets != nil {
 			content = msg.Qapi.Assets.ProcessMarkdownTo(content, msg.GroupId, msg.UserId)
 		}
+		content = msg.fitImages(content)
 		type mdMsg struct {
 			*Message
 			Type     constant.MessageType `json:"msg_type"`

@@ -2,11 +2,13 @@ package admin
 
 import (
 	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/inbox"
 	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"github.com/KasumiYuku/Aurorix/lib/schedule"
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,6 +16,7 @@ const (
 	topicOverview = "overview.snapshot"
 	topicJobs     = "jobs.list"
 	topicLog      = "log.entry"
+	topicInbox    = "inbox.message"
 
 	replayLimit = 512
 )
@@ -43,7 +46,19 @@ type replayFrame struct {
 }
 
 func newLiveBus(deps Deps) *liveBus {
-	return &liveBus{deps: deps, subs: make(map[*liveSub]struct{})}
+	b := &liveBus{deps: deps, subs: make(map[*liveSub]struct{})}
+	currentBus.Store(b)
+	return b
+}
+
+// currentBus 让"往实时通道推一条业务消息"不必从 Register 一路传参下来。
+var currentBus atomic.Pointer[liveBus]
+
+// PublishInbox 把一条新消息推给所有在线管理台; 没人连着时什么也不做。
+func PublishInbox(m inbox.Message) {
+	if b := currentBus.Load(); b != nil {
+		b.publish(topicInbox, m)
+	}
 }
 
 func encodeFrame(seq int64, topic string, payload []byte) []byte {

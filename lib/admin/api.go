@@ -56,12 +56,15 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 		MinLevel: q.Get("min_level"),
 		Scope:    q.Get("scope"),
 		Text:     q.Get("q"),
+		Group:    q.Get("group"),
+		User:     q.Get("user"),
 	})
 	writeJSON(w, http.StatusOK, H{
 		"entries": entries,
 		"scopes":  logx.Scopes(),
 		"total":   logx.Total(),
 		"errors":  logx.Errors(),
+		"summary": logx.Summarise(),
 	})
 }
 

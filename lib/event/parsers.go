@@ -27,6 +27,7 @@ func parseMessageEvent(origin constant.MessageOrigin) Parser {
 			UserID:      p.ActorID(),
 			Origin:      origin,
 			Content:     content,
+			Username:    d.Author.Username,
 			RawContent:  raw,
 			Mentions:    d.Mentions,
 			Attachments: d.Attachments,

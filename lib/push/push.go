@@ -9,6 +9,7 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/api"
 	"github.com/KasumiYuku/Aurorix/lib/constant"
 	"github.com/KasumiYuku/Aurorix/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/images"
 	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"github.com/KasumiYuku/Aurorix/lib/storage"
@@ -246,6 +247,7 @@ func HTTPHandle(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, pushResponse{Error: "content is required"})
 		return
 	}
+	content = images.ClampMarkdown(content, api.ImageBox)
 	payload, err := buildPayload(strings.ToLower(req.Type), content)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, pushResponse{Error: err.Error()})

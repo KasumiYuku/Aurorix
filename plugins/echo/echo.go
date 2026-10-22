@@ -65,7 +65,7 @@ func echoHandlefunc(context *context.MessageContext) error {
 	msg := context.Markdown(text)
 	k := &buttons.Keyboard{}
 	btn, _ := k.AppendButton("callbacktest", "回调按钮测试", "点击了", buttons.Gray, 0)
-	btn.SetCallbackWithoutHandle(context.Content).SetUnsupportedTip("1").SetUserWhiteList(append(make([]string, 0), context.UserId))
+	btn.SetCallback(context.Content, nil).SetUnsupportedTip("1").SetUserWhiteList(append(make([]string, 0), context.UserId))
 	msg.Keyboard(k)
 	return msg.Send()
 }

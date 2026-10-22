@@ -7,6 +7,7 @@ import (
 	"github.com/KasumiYuku/Aurorix/lib/api"
 	"github.com/KasumiYuku/Aurorix/lib/assets"
 	"github.com/KasumiYuku/Aurorix/lib/config"
+	"github.com/KasumiYuku/Aurorix/lib/inbox"
 	"github.com/KasumiYuku/Aurorix/lib/plugin"
 	"io"
 	"io/fs"
@@ -40,6 +41,7 @@ type Deps struct {
 	Gateway func() any
 	Control Control
 	Profile *profileStore
+	Inbox   *inbox.Store
 }
 
 // Control 运行控制回调, 由 main 注入。
@@ -71,6 +73,9 @@ func Register(mux *http.ServeMux, deps Deps) {
 		registerAssetsRoutes(api, deps.Assets)
 	}
 	registerMenuRoutes(api, deps)
+	if deps.Inbox != nil {
+		registerInboxRoutes(api, deps)
+	}
 	api.HandleFunc("GET /admin/api/jobs", handleJobs)
 	api.HandleFunc("POST /admin/api/jobs/{id}/pause", handleJobPause)
 	api.HandleFunc("GET /admin/api/config", handleGetConfig)

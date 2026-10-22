@@ -17,6 +17,52 @@ type MediaInput struct {
 	MimeType string
 }
 
+// ProbeMediaMime 探测媒体 MIME: 先按图片魔数, 再按视频容器。
+func ProbeMediaMime(buf []byte) string {
+	if mime := images.ProbeMime(buf); mime != "" {
+		return mime
+	}
+	return probeVideoMime(buf)
+}
+
+// probeVideoMime 认 ISO-BMFF(mp4/mov) 与 Matroska(webm) 的常见容器魔数。
+func probeVideoMime(buf []byte) string {
+	if len(buf) >= 12 && string(buf[4:8]) == "ftyp" {
+		switch string(buf[8:12]) {
+		case "qt  ":
+			return "video/quicktime"
+		case "heic", "heix", "mif1", "msf1":
+			return "image/heic"
+		default:
+			return "video/mp4"
+		}
+	}
+	if len(buf) >= 4 && buf[0] == 0x1a && buf[1] == 0x45 && buf[2] == 0xdf && buf[3] == 0xa3 {
+		return "video/webm"
+	}
+	return ""
+}
+
+// mediaExt 是 MIME → 扩展名; 图片沿用 images 包, 视频与音频在这里补齐。
+func mediaExt(mime string) string {
+	if ext := images.ExtFromMime(mime); ext != "" {
+		return ext
+	}
+	switch mime {
+	case "video/mp4":
+		return "mp4"
+	case "video/webm":
+		return "webm"
+	case "video/quicktime":
+		return "mov"
+	case "audio/mpeg":
+		return "mp3"
+	case "audio/ogg":
+		return "ogg"
+	}
+	return ""
+}
+
 // Decode 通用媒体输入归一化：[]byte/data URL/裸 base64/本地路径/公网 URL。
 func Decode(src any) (MediaInput, error) {
 	switch v := src.(type) {

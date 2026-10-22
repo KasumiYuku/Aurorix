@@ -210,7 +210,7 @@ func AvatarURLSize(appID, openID string, size int) string {
 	if size <= 0 {
 		size = 640
 	}
-	return "https://q.qlogo.cn/qqapp/" + appID + "/" + openID + "/" + strconv.Itoa(size)
+	return "https://thirdqq.qlogo.cn/qqapp/" + appID + "/" + openID + "/" + strconv.Itoa(size)
 }
 
 // ClassifyAttachment 按 content_type 分类附件，返回分类名。

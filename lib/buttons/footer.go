@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/KasumiYuku/Aurorix/lib/context"
 	"github.com/KasumiYuku/Aurorix/lib/contract"
@@ -41,6 +40,53 @@ const (
 	footerDefaultReply = "已记录，当前 {{count}} 次。"
 )
 
+// FooterScope 标识一组底部按钮的归属。所有作用域共用同一张回调表, 靠槽位段区分:
+// 每个作用域占 footerMaxButtons 个连续槽位, 所以不同来源的按钮永远不会串到一起。
+type FooterScope int
+
+const (
+	// FooterGlobal 全局底部按钮, 挂在每条 Markdown 消息末尾。
+	FooterGlobal FooterScope = iota
+	// FooterNoticeWelcome 入群欢迎专属按钮。
+	FooterNoticeWelcome
+	// FooterNoticeFarewell 退群提示专属按钮。
+	FooterNoticeFarewell
+)
+
+// footerScopes 是全部作用域; 新增一个就在这里加一行, 槽位数与回调注册自动跟上。
+var footerScopes = []FooterScope{FooterGlobal, FooterNoticeWelcome, FooterNoticeFarewell}
+
+func (s FooterScope) slotBase() int { return int(s) * footerMaxButtons }
+
+// slug 是计数键里的作用域名; 全局返回空串, 沿用 "footer.<键>" 的旧格式。
+func (s FooterScope) slug() string {
+	switch s {
+	case FooterNoticeWelcome:
+		return "notice.welcome"
+	case FooterNoticeFarewell:
+		return "notice.farewell"
+	}
+	return ""
+}
+
+func (s FooterScope) String() string {
+	switch s {
+	case FooterNoticeWelcome:
+		return "入群欢迎"
+	case FooterNoticeFarewell:
+		return "退群提示"
+	}
+	return "全局"
+}
+
+// footerSlotOf 把回调槽位号还原成 (作用域, 作用域内序号)。
+func footerSlotOf(slot int) (FooterScope, int, bool) {
+	if slot < 0 || slot/footerMaxButtons >= len(footerScopes) {
+		return FooterGlobal, 0, false
+	}
+	return FooterScope(slot / footerMaxButtons), slot % footerMaxButtons, true
+}
+
 // FooterKind 底部按钮的行为类型。
 type FooterKind string
 
@@ -55,6 +101,8 @@ const (
 	FooterRepeat FooterKind = "repeat"
 	// FooterImage 图片: 点击把那一段 URL 的图发给点击者。
 	FooterImage FooterKind = "image"
+	// FooterCallback 回调: 点击转给指定 id 的回调函数, 由注册它的那一方决定发什么。
+	FooterCallback FooterKind = "callback"
 )
 
 // FooterSpec 一行配置解析后的结果。
@@ -88,11 +136,12 @@ var footerReplyPlaceholders = []string{"count", "user", "group", "label"}
 var footerPlaceholderRe = regexp.MustCompile(`\{\{([^}]*)\}\}`)
 
 var footerAllowedOptions = map[FooterKind][]string{
-	FooterCounter: {"key", "dedup", "scope", "style", "visited", "dup"},
-	FooterCommand: {"key", "auto", "style", "visited"},
-	FooterLink:    {"key", "style", "visited"},
-	FooterRepeat:  {"auto", "style", "visited"},
-	FooterImage:   {"style", "visited"},
+	FooterCounter:  {"key", "dedup", "scope", "style", "visited", "dup"},
+	FooterCommand:  {"key", "auto", "style", "visited"},
+	FooterLink:     {"key", "style", "visited"},
+	FooterRepeat:   {"auto", "style", "visited"},
+	FooterImage:    {"style", "visited"},
+	FooterCallback: {"style", "visited"},
 }
 
 // ParseFooter 解析底部按钮配置。空行与 # 开头的注释行跳过。
@@ -214,8 +263,10 @@ func parseFooterKind(raw string) (FooterKind, error) {
 		return FooterRepeat, nil
 	case "image", "图片", "图":
 		return FooterImage, nil
+	case "callback", "回调":
+		return FooterCallback, nil
 	}
-	return "", fmt.Errorf("类型 %q 不认识, 只能是 counter(计数) / command(指令) / link(链接) / repeat(复读)", raw)
+	return "", fmt.Errorf("类型 %q 不认识, 只能是 counter(计数) / command(指令) / link(链接) / repeat(复读) / image(图片) / callback(回调)", raw)
 }
 
 func parseFooterOptions(text string) (map[string]string, error) {
@@ -308,6 +359,13 @@ func (s FooterSpec) validate() error {
 		if err != nil || target.Host == "" || (target.Scheme != "http" && target.Scheme != "https") {
 			return fmt.Errorf("image 的第 3 段要是 http(s) 图片链接, 收到 %q", s.Arg)
 		}
+	case FooterCallback:
+		if s.Arg == "" {
+			return errors.New("callback(回调) 要在第 3 段写回调 id, 例如 okamikko.noat.guide")
+		}
+		if _, ok := GetCallbackFunc(s.Arg); !ok {
+			return fmt.Errorf("callback(回调) 指向的 %q 没有注册, 点了不会有反应", s.Arg)
+		}
 	}
 	return nil
 }
@@ -340,12 +398,12 @@ func footerButton(spec FooterSpec, index int, originalInput string) (Button, boo
 		RenderData: RenderData{
 			Label:   spec.Label,
 			Visited: spec.option("visited", footerDefaultVisited(spec.Kind)),
-			Style:   footerStyle(spec.option("style", "blue")),
+			Style:   footerStyle(spec.option("style", "")),
 		},
 	}
 	switch spec.Kind {
 	case FooterCounter:
-		btn.SetCallbackWithoutHandle(strconv.Itoa(index))
+		btn.SetCallback(strconv.Itoa(index), nil)
 	case FooterCommand:
 		btn.SetAutoCommand(spec.Arg, spec.option("auto", "0") == "1", false)
 	case FooterLink:
@@ -356,14 +414,18 @@ func footerButton(spec FooterSpec, index int, originalInput string) (Button, boo
 		}
 		btn.SetAutoCommand(originalInput, spec.option("auto", "0") == "1", false)
 	case FooterImage:
-		btn.SetCallbackWithoutHandle(strconv.Itoa(index))
+		btn.SetCallback(strconv.Itoa(index), nil)
+	case FooterCallback:
+		// data 是平台必填字段; 按 id 路由的回调不靠它传参, 就填回调 id 本身。
+		btn.Id = spec.Arg
+		btn.SetCallback(spec.Arg, nil)
 	}
 	btn.SetPermission(AllUser)
 	btn.SetUnsupportedTip(defaultUnsupportedTip)
 	return btn, true
 }
 
-// FooterButtons 按解析结果构造一整排底部按钮; 放不了的按钮会被跳过。空配置返回 nil。
+// FooterButtons 按解析结果构造一整排全局底部按钮; 放不了的按钮会被跳过。空配置返回 nil。
 func FooterButtons(specs []FooterSpec, originalInput string) []Button {
 	out := make([]Button, 0, len(specs))
 	for i, spec := range specs {
@@ -375,13 +437,13 @@ func FooterButtons(specs []FooterSpec, originalInput string) []Button {
 }
 
 // footerButtonRows 按配置行分组构造按钮; 放不了的按钮从所在行去掉, 空行不出现。
-func footerButtonRows(result FooterParseResult, originalInput string) [][]Button {
+func footerButtonRows(result FooterParseResult, base int, originalInput string) [][]Button {
 	var out [][]Button
 	flat := 0
 	for _, row := range result.Rows {
 		list := make([]Button, 0, len(row))
 		for range row {
-			if btn, ok := footerButton(result.Specs[flat], flat, originalInput); ok {
+			if btn, ok := footerButton(result.Specs[flat], base+flat, originalInput); ok {
 				list = append(list, btn)
 			}
 			flat++
@@ -401,29 +463,37 @@ func footerDefaultVisited(kind FooterKind) string {
 		return "已投"
 	case FooterCommand, FooterRepeat:
 		return "已填入"
-	case FooterImage:
+	case FooterImage, FooterCallback:
 		return "已发送"
 	}
 	return ""
 }
 
+// footerStyle 认数字(与 QQ 的 render_style 一致)和 gray/blue 两个别名; 认不出就用文字样式。
 func footerStyle(name string) ButtonStyle {
-	if name == "gray" {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "0", "gray", "grey":
 		return Gray
+	case "1", "blue":
+		return Blue
+	case "2":
+		return GraySolid
+	case "3":
+		return BlueSolid
 	}
-	return Blue
+	return BlueText
 }
 
 // FooterMerge 是给 message.SetFooterHook 用的合并函数: 按配置行给消息原有键盘追加底部按钮行。
 // originalInput 是触发这条消息的原消息文本(主动推送时为空); 复读按钮靠它把原文填回用户输入框。
 // 插件自己排好的行不动; 键盘已满时放弃放不下的底部行并记警告, 保证插件 UI 不被破坏。
 func FooterMerge(kb contract.CanMarshal, originalInput string) contract.CanMarshal {
-	result, errs := currentFooterResult()
+	result, errs := currentFooterResult(FooterGlobal)
 	logFooterErrors(errs)
 	if len(result.Specs) == 0 {
 		return kb
 	}
-	rows := footerButtonRows(result, originalInput)
+	rows := footerButtonRows(result, FooterGlobal.slotBase(), originalInput)
 	if len(rows) == 0 {
 		return kb
 	}
@@ -443,6 +513,22 @@ func FooterMerge(kb contract.CanMarshal, originalInput string) contract.CanMarsh
 	return existing
 }
 
+// FooterKeyboard 构造某个作用域专有的按钮板; 该作用域没配按钮时返回 nil。
+// 用于不该跟全局底部按钮混在一起的消息, 例如入群欢迎。
+func FooterKeyboard(scope FooterScope, originalInput string) *Keyboard {
+	result, errs := currentFooterResult(scope)
+	logFooterErrors(errs)
+	rows := footerButtonRows(result, scope.slotBase(), originalInput)
+	if len(rows) == 0 {
+		return nil
+	}
+	kb := &Keyboard{}
+	if !appendFooterRows(kb, rows) {
+		return nil
+	}
+	return kb
+}
+
 // appendFooterRows 把按钮行逐行追加到键盘末尾; 某行装不下时停止并返回 false。
 func appendFooterRows(kb *Keyboard, rows [][]Button) bool {
 	for _, row := range rows {
@@ -455,50 +541,71 @@ func appendFooterRows(kb *Keyboard, rows [][]Button) bool {
 }
 
 var (
-	footerSource atomic.Pointer[func() []string]
-	footerOnce   sync.Once
-	footerCache  struct {
-		sync.Mutex
-		ready  bool
-		raw    string
-		result FooterParseResult
-	}
+	footerMu      sync.RWMutex
+	footerSources = map[FooterScope]func() []string{}
+	footerCaches  = map[FooterScope]*footerCache{}
+	footerOnce    sync.Once
 )
+
+// footerCache 记住某个作用域上一次解析的结果; 配置没变就不重复解析, 错误也只报一次。
+type footerCache struct {
+	ready  bool
+	raw    string
+	result FooterParseResult
+}
 
 // EnableFooter 打开框架级底部按钮: 注入配置来源、注册回调分发器、挂上消息钩子。
 // source 每次调用都应返回「当前」配置(通常是 config.Current().FooterButtons), 这样热更立即生效。
 func EnableFooter(source func() []string) {
-	footerSource.Store(&source)
-	InstallFooterHandlers()
+	SetFooterSource(FooterGlobal, source)
 	message.SetFooterHook(FooterMerge)
 }
 
-// DisableFooter 关掉底部按钮, 主要给测试与运行期停用。
+// SetFooterSource 给某个作用域注入配置来源; 传 nil 表示停用该作用域。
+// source 每次调用都应返回「当前」配置, 所以热更立即生效, 不必重启。
+func SetFooterSource(scope FooterScope, source func() []string) {
+	footerMu.Lock()
+	if source == nil {
+		delete(footerSources, scope)
+	} else {
+		footerSources[scope] = source
+	}
+	delete(footerCaches, scope)
+	footerMu.Unlock()
+	InstallFooterHandlers()
+}
+
+// DisableFooter 关掉框架级底部按钮, 主要给测试与运行期停用。
 func DisableFooter() {
-	footerSource.Store(nil)
+	SetFooterSource(FooterGlobal, nil)
 	message.SetFooterHook(nil)
 }
 
-// currentFooterResult 读一次配置并解析; 同一批配置只解析一次, 错误也只报一次, 避免逐条消息刷屏。
-func currentFooterResult() (FooterParseResult, []string) {
-	src := footerSource.Load()
+// currentFooterResult 读一次某个作用域的配置并解析; 同一批配置只解析一次, 错误也只报一次, 避免逐条消息刷屏。
+func currentFooterResult(scope FooterScope) (FooterParseResult, []string) {
+	footerMu.Lock()
+	defer footerMu.Unlock()
+	src := footerSources[scope]
 	if src == nil {
 		return FooterParseResult{}, nil
 	}
-	raw := strings.Join((*src)(), "\n")
-	footerCache.Lock()
-	defer footerCache.Unlock()
-	if footerCache.ready && raw == footerCache.raw {
-		return footerCache.result, nil
+	raw := strings.Join(src(), "\n")
+	cache := footerCaches[scope]
+	if cache == nil {
+		cache = &footerCache{}
+		footerCaches[scope] = cache
+	}
+	if cache.ready && raw == cache.raw {
+		return cache.result, nil
 	}
 	result := ParseFooter(strings.Split(raw, "\n"))
-	footerCache.ready, footerCache.raw, footerCache.result = true, raw, result
+	cache.ready, cache.raw, cache.result = true, raw, result
 	return result, result.Errors
 }
 
-// currentFooterSpecs 只取展平后的按钮列表(回调分发用), 顺序即回调序号。
-func currentFooterSpecs() ([]FooterSpec, []string) {
-	result, errs := currentFooterResult()
+// currentFooterSpecs 只取展平后的按钮列表(回调分发用), 顺序即作用域内序号。
+func currentFooterSpecs(scope FooterScope) ([]FooterSpec, []string) {
+	result, errs := currentFooterResult(scope)
 	return result.Specs, errs
 }
 
@@ -508,37 +615,51 @@ func logFooterErrors(errs []string) {
 	}
 }
 
-// InstallFooterHandlers 注册底部按钮的回调分发器; 重复调用只生效一次。
+// InstallFooterHandlers 注册全部作用域的回调分发器; 重复调用只生效一次。
 func InstallFooterHandlers() {
 	footerOnce.Do(func() {
-		for i := 0; i < footerMaxButtons; i++ {
-			RegisterCallbackFunc(footerButtonID(i), handleFooterClick)
+		for _, scope := range footerScopes {
+			for i := 0; i < footerMaxButtons; i++ {
+				RegisterCallbackFunc(footerButtonID(scope.slotBase()+i), handleFooterClick)
+			}
 		}
 	})
 }
 
 // handleFooterClick 分发底部按钮的点击。
-// 回调数据只带「序号」, 真正的行为每次从当前配置里取 —— 所以改配置不需要重新注册处理器。
+// 回调数据只带「槽位号」, 作用域与真正的行为每次从当前配置里取 —— 所以改配置不需要重新注册处理器。
 func handleFooterClick(ctx *context.CallbackContext) error {
-	index, err := strconv.Atoi(strings.TrimSpace(ctx.Data))
+	slot, err := strconv.Atoi(strings.TrimSpace(ctx.Data))
 	if err != nil {
 		return fmt.Errorf("底部按钮回调数据非法: %q", ctx.Data)
 	}
-	specs, errs := currentFooterSpecs()
+	scope, index, ok := footerSlotOf(slot)
+	if !ok {
+		return fmt.Errorf("底部按钮槽位 %d 不属于任何作用域", slot)
+	}
+	specs, errs := currentFooterSpecs(scope)
 	logFooterErrors(errs)
-	if index < 0 || index >= len(specs) {
-		return fmt.Errorf("底部按钮 #%d 已不在配置里(配置改过?), 忽略本次点击", index)
+	if index >= len(specs) {
+		return fmt.Errorf("%s底部按钮 #%d 已不在配置里(配置改过?), 忽略本次点击", scope, index)
 	}
 	spec := specs[index]
 	switch spec.Kind {
 	case FooterCounter:
-		return footerCount(ctx, spec)
+		return footerCount(ctx, spec, scope)
 	case FooterImage:
 		return footerImage(ctx, spec)
 	default:
 		// command / link 是纯客户端行为, 不会走到回调分发
 		return nil
 	}
+}
+
+// footerCountKey 各作用域的计数键互不影响; 全局沿用旧键名, 已有计数不用迁移。
+func footerCountKey(scope FooterScope, spec FooterSpec) string {
+	if slug := scope.slug(); slug != "" {
+		return "footer." + slug + "." + spec.Key
+	}
+	return "footer." + spec.Key
 }
 
 // footerImage 图片按钮: 点击后把配置里那段 URL 的图发给点击者。
@@ -548,10 +669,10 @@ func footerImage(ctx *context.CallbackContext, spec FooterSpec) error {
 }
 
 // footerCount 计数按钮: 按去重规则决定算不算一次, 然后按模板回复。
-func footerCount(ctx *context.CallbackContext, spec FooterSpec) error {
-	key := "footer." + spec.Key
+func footerCount(ctx *context.CallbackContext, spec FooterSpec, scope FooterScope) error {
+	key := footerCountKey(scope, spec)
 	bucket, bucketID := ctx.GroupStorage, ctx.GroupId
-	if scope := spec.option("scope", "group"); scope == "global" || bucketID == "" {
+	if bucketScope := spec.option("scope", "group"); bucketScope == "global" || bucketID == "" {
 		bucket, bucketID = ctx.GlobalStorage, "global"
 	}
 	if bucket == nil {

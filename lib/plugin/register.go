@@ -196,8 +196,8 @@ var denyAllAccessRule = AccessRule{Mode: "whitelist"}
 // LoadConfigurations 把每个插件的配置交给它自己校验并生效。
 func LoadConfigurations(settings map[string]map[string]any) error {
 	lock.Lock()
-	defer lock.Unlock()
 	var failures []error
+	var applied []func()
 	for id, registered := range globalPlugins {
 		if len(registered.Config) == 0 {
 			continue
@@ -216,6 +216,14 @@ func LoadConfigurations(settings map[string]map[string]any) error {
 			}
 		}
 		pluginSettings[id] = values
+		if registered.OnConfigApplied != nil {
+			applied = append(applied, registered.OnConfigApplied)
+		}
+	}
+	lock.Unlock()
+	// 生效钩子在解锁之后跑: 插件可以在里面读注册表或发消息, 不必担心卡在同一把锁上。
+	for _, hook := range applied {
+		hook()
 	}
 	return errors.Join(failures...)
 }
@@ -680,17 +688,24 @@ func normalizeNumber(value any) (any, bool) {
 
 func ApplyConfiguration(id string, settings map[string]any) error {
 	lock.Lock()
-	defer lock.Unlock()
 	registered, ok := globalPlugins[id]
 	if !ok {
+		lock.Unlock()
 		return fmt.Errorf("plugin %s is not registered", id)
 	}
 	if registered.ApplyConfig != nil {
 		if err := registered.ApplyConfig(cloneSettings(settings)); err != nil {
+			lock.Unlock()
 			return err
 		}
 	}
 	pluginSettings[id] = cloneSettings(settings)
+	hook := registered.OnConfigApplied
+	lock.Unlock()
+	// 与启动加载同一条口径: 面板存完也通知一次, 「生效后的摘要」才不会只在新进程里对。
+	if hook != nil {
+		hook()
+	}
 	return nil
 }
 

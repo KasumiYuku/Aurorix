@@ -6,12 +6,19 @@ import (
 )
 
 // AtMessage 艾特部件：All 为 true 时艾特所有人。
+//
+// AvatarURL 非空时会在艾特前面垫一张圆形头像（引用块 + 标题），只在 markdown 消息里生效 ——
+// 纯文本消息没有渲染能力，硬塞会露出一串原始符号。
 type AtMessage struct {
 	*Message
 	OpenID  string `json:"-"`
 	All     bool   `json:"-"`
 	Newline bool   `json:"-"`
 	Quote   bool   `json:"-"`
+	// AvatarURL 头像直链; AvatarPx 是客户端里显示的边长; Heading 是头像那行的标题级别(0 表示不套标题)。
+	AvatarURL string `json:"-"`
+	AvatarPx  int    `json:"-"`
+	Heading   int    `json:"-"`
 }
 
 func (*AtMessage) part() {}

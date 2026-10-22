@@ -7,6 +7,18 @@ const (
 	maxBuilderPerRow = 5
 )
 
+type Opt func(*Button)
+
+func Style(style ButtonStyle) Opt { return func(b *Button) { b.RenderData.Style = style } }
+
+func Visited(label string) Opt { return func(b *Button) { b.RenderData.Visited = label } }
+
+func Only(users ...string) Opt { return func(b *Button) { b.SetUserWhiteList(users) } }
+
+func AutoSend() Opt { return func(b *Button) { b.Action.AutoSend = true } }
+
+func Tip(text string) Opt { return func(b *Button) { b.Action.UnsupportTips = text } }
+
 type Builder struct {
 	kb    Keyboard
 	scope string
@@ -25,46 +37,16 @@ func (b *Builder) Row() *Builder {
 	return b
 }
 
-func (b *Builder) Callback(id, label, visited, data string) *Builder {
-	return b.add(id, label, visited, Blue, AllUser, nil, func(btn *Button) {
-		btn.SetCallbackWithoutHandle(data)
-	})
+func (b *Builder) Link(id, label, url string, opts ...Opt) *Builder {
+	return b.add(id, label, Blue, func(btn *Button) { btn.SetHref(url) }, opts)
 }
 
-func (b *Builder) CallbackFor(id, label, visited, data string, users []string) *Builder {
-	return b.add(id, label, visited, Blue, SomeUser, users, func(btn *Button) {
-		btn.SetCallbackWithoutHandle(data)
-	})
+func (b *Builder) Callback(id, label, data string, opts ...Opt) *Builder {
+	return b.add(id, label, Blue, func(btn *Button) { btn.SetCallback(data, nil) }, opts)
 }
 
-func (b *Builder) Command(id, label, visited, content string) *Builder {
-	return b.add(id, label, visited, Gray, AllUser, nil, func(btn *Button) {
-		btn.SetAutoCommand(content, false, false)
-	})
-}
-
-func (b *Builder) Primary(id, label, visited, content string) *Builder {
-	return b.add(id, label, visited, Blue, AllUser, nil, func(btn *Button) {
-		btn.SetAutoCommand(content, false, false)
-	})
-}
-
-func (b *Builder) Action(id, label, content string) *Builder {
-	return b.add(id, label, "已填入", Gray, AllUser, nil, func(btn *Button) {
-		btn.SetAutoCommand(content, false, false)
-	})
-}
-
-func (b *Builder) Link(id, label, visited, url string) *Builder {
-	return b.add(id, label, visited, Blue, AllUser, nil, func(btn *Button) {
-		btn.SetHref(url)
-	})
-}
-
-func (b *Builder) LinkPlain(id, label, visited, url string) *Builder {
-	return b.add(id, label, visited, Gray, AllUser, nil, func(btn *Button) {
-		btn.SetHref(url)
-	})
+func (b *Builder) Command(id, label, content string, opts ...Opt) *Builder {
+	return b.add(id, label, Gray, func(btn *Button) { btn.SetAutoCommand(content, false, false) }, opts)
 }
 
 func (b *Builder) Build() *Keyboard {
@@ -74,38 +56,42 @@ func (b *Builder) Build() *Keyboard {
 	return &b.kb
 }
 
-func (b *Builder) add(id, label, visited string, style ButtonStyle, perm AllowedPermission, users []string, apply func(*Button)) *Builder {
-	for {
-		if b.row >= maxBuilderRows {
-			logger.Errorf("按钮板已满, 丢弃按钮 %s", id)
-			return b
-		}
-		if len(b.kb.Rows) <= b.row {
-			b.kb.Rows = append(b.kb.Rows, Buttons{})
-		}
-		if len(b.kb.Rows[b.row].List) < maxBuilderPerRow {
-			break
-		}
-		b.row++
+func (b *Builder) add(id, label string, style ButtonStyle, apply func(*Button), opts []Opt) *Builder {
+	row, ok := b.slot(id)
+	if !ok {
+		return b
 	}
-	btn, err := b.kb.AppendButton(b.qualify(id), label, visited, style, b.row)
+	btn, err := b.kb.AppendButton(Qualify(b.scope, id), label, label, style, row)
 	if err != nil {
 		logger.Errorf("按钮板构造失败(%s): %v", id, err)
 		return b
 	}
-	apply(btn)
-	if perm == SomeUser && len(users) > 0 {
-		btn.SetUserWhiteList(users)
-	} else {
-		btn.SetPermission(AllUser)
-	}
+	btn.SetUserWhiteList(nil)
 	btn.SetUnsupportedTip(defaultUnsupportedTip)
+	apply(btn)
+	for _, opt := range opts {
+		opt(btn)
+	}
 	return b
 }
 
-func (b *Builder) qualify(id string) string {
-	if b.scope == "" {
+func (b *Builder) slot(id string) (int, bool) {
+	for b.row < maxBuilderRows {
+		if len(b.kb.Rows) <= b.row {
+			b.kb.Rows = append(b.kb.Rows, Buttons{})
+		}
+		if len(b.kb.Rows[b.row].List) < maxBuilderPerRow {
+			return b.row, true
+		}
+		b.row++
+	}
+	logger.Errorf("按钮板已满, 丢弃按钮 %s", id)
+	return 0, false
+}
+
+func Qualify(scope, id string) string {
+	if scope == "" {
 		return id
 	}
-	return b.scope + "." + id
+	return scope + "." + id
 }

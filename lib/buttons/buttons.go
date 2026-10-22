@@ -102,15 +102,12 @@ func (button *Button) SetHref(url string) *Button {
 func (button *Button) SetCallback(data string, handle CallbackButtonHandleFunc) *Button {
 	button.Action.CallbackData = data
 	button.Action.Type = Callback
+	if handle == nil {
+		return button
+	}
 	CallbackFuncMapLock.Lock()
 	defer CallbackFuncMapLock.Unlock()
 	CallbackFuncMap[button.Id] = handle
-	return button
-}
-
-func (button *Button) SetCallbackWithoutHandle(data string) *Button {
-	button.Action.CallbackData = data
-	button.Action.Type = Callback
 	return button
 }
 

@@ -1,45 +1,70 @@
-// Package stats 管理台统计: 群/私聊用户/每日计数, SQLite 持久化, 重启不丢。
+// Package stats 管理台统计: 计数在内存累加, 单写者按增量落库, 消息热路径不碰 DB。
 package stats
 
 import (
 	"database/sql"
-	"fmt"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/KasumiYuku/Aurorix/lib/storage"
 )
 
 const (
-	flushThreshold = 128
-	flushInterval  = 10 * time.Second
-	keepDays       = 90
+	flushInterval = 5 * time.Second
+	flushRows     = 4096
+	keepDays      = 90
+)
+
+const (
+	groupUpsert = `INSERT INTO stats_groups (group_id, name, msg_count) VALUES (?, ?, ?)
+		ON CONFLICT(group_id) DO UPDATE SET
+			msg_count = stats_groups.msg_count + excluded.msg_count,
+			name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE stats_groups.name END`
+	peerUpsert = `INSERT INTO stats_peers (peer_id, msg_count) VALUES (?, ?)
+		ON CONFLICT(peer_id) DO UPDATE SET msg_count = stats_peers.msg_count + excluded.msg_count`
+	dayUpsert = `INSERT INTO stats_daily (day, recv, sent, button) VALUES (?, ?, ?, ?)
+		ON CONFLICT(day) DO UPDATE SET
+			recv = stats_daily.recv + excluded.recv,
+			sent = stats_daily.sent + excluded.sent,
+			button = stats_daily.button + excluded.button`
 )
 
 var (
-	statsMu     sync.Mutex
-	groups      = make(map[string]*groupStat)
-	peers       = make(map[string]uint64)
-	daily       = make(map[string]*dayStat)
-	dirty       atomic.Bool
-	flushTicker *time.Ticker
-	stopCh      chan struct{}
+	statsMu sync.Mutex
+	flushMu sync.Mutex
+
+	groups = make(map[string]*groupStat)
+	peers  = make(map[string]*peerStat)
+	daily  = make(map[string]*dayStat)
+
+	dirtyGroups = make(map[string]struct{})
+	dirtyPeers  = make(map[string]struct{})
+	dirtyDays   = make(map[string]struct{})
+
+	wake   = make(chan struct{}, 1)
+	wg     sync.WaitGroup
+	stopCh chan struct{}
+
+	lastTrim string
 )
 
 type groupStat struct {
-	name string
-	msg  uint64
+	name    string
+	msg     uint64
+	pending int64
+}
+
+type peerStat struct {
+	msg     uint64
+	pending int64
 }
 
 type dayStat struct {
-	recv   uint64
-	sent   uint64
-	button uint64
+	recv, sent, button    uint64
+	dRecv, dSent, dButton int64
 }
 
-// Group 记录一条群消息; name 非空时顺带更新群名缓存。
 func Group(groupID, name string) {
 	statsMu.Lock()
 	g := groups[groupID]
@@ -51,21 +76,38 @@ func Group(groupID, name string) {
 		g.name = name
 	}
 	g.msg++
+	g.pending++
+	dirtyGroups[groupID] = struct{}{}
+	rows := len(dirtyGroups) + len(dirtyPeers) + len(dirtyDays)
 	statsMu.Unlock()
-	dirty.Store(true)
-	maybeFlush()
+	if rows >= flushRows {
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
 }
 
-// Peer 记录一条私聊消息。
 func Peer(peerID string) {
 	statsMu.Lock()
-	peers[peerID]++
+	p := peers[peerID]
+	if p == nil {
+		p = &peerStat{}
+		peers[peerID] = p
+	}
+	p.msg++
+	p.pending++
+	dirtyPeers[peerID] = struct{}{}
+	rows := len(dirtyGroups) + len(dirtyPeers) + len(dirtyDays)
 	statsMu.Unlock()
-	dirty.Store(true)
-	maybeFlush()
+	if rows >= flushRows {
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
 }
 
-// Recv/Sent/Button 记录今日收发与按钮计数。
 func Recv()   { dayAdd(recvKind) }
 func Sent()   { dayAdd(sentKind) }
 func Button() { dayAdd(buttonKind) }
@@ -79,128 +121,222 @@ const (
 )
 
 func dayAdd(kind dayKind) {
+	day := todayOf(time.Now())
 	statsMu.Lock()
-	d := todayOf(time.Now())
-	cur := daily[d]
-	if cur == nil {
-		cur = &dayStat{}
-		daily[d] = cur
+	d := daily[day]
+	if d == nil {
+		d = &dayStat{}
+		daily[day] = d
 	}
 	switch kind {
 	case recvKind:
-		cur.recv++
+		d.recv++
+		d.dRecv++
 	case sentKind:
-		cur.sent++
+		d.sent++
+		d.dSent++
 	case buttonKind:
-		cur.button++
+		d.button++
+		d.dButton++
 	}
+	dirtyDays[day] = struct{}{}
+	rows := len(dirtyGroups) + len(dirtyPeers) + len(dirtyDays)
 	statsMu.Unlock()
-	dirty.Store(true)
-	maybeFlush()
+	if rows >= flushRows {
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func todayOf(t time.Time) string { return t.Format("2006-01-02") }
 
-func maybeFlush() {
-	statsMu.Lock()
-	pending := len(groups) + len(peers) + len(daily)
-	statsMu.Unlock()
-	if pending >= flushThreshold {
-		Flush()
-	}
-}
-
-// Start 装载历史数据并启动后台 flush 循环。
+// Start 装载历史数据并启动唯一那个写库协程。
 func Start() error {
 	if err := load(); err != nil {
 		return err
 	}
 	statsMu.Lock()
 	defer statsMu.Unlock()
-	if flushTicker != nil {
+	if stopCh != nil {
 		return nil
 	}
-	flushTicker = time.NewTicker(flushInterval)
 	stopCh = make(chan struct{})
-	go loop()
+	wg.Add(1)
+	go loop(stopCh)
 	return nil
 }
 
-func loop() {
+func loop(stop chan struct{}) {
+	defer wg.Done()
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-flushTicker.C:
-			Flush()
-		case <-stopCh:
+		case <-ticker.C:
+		case <-wake:
+		case <-stop:
 			return
 		}
+		Flush()
 	}
 }
 
-// Stop 停止后台 flush 并兜底落库 (进程退出前调用)。
+// Stop 停掉写库协程并同步落最后一批; 之后进程再退出最多丢一个 flushInterval 的增量。
 func Stop() {
 	statsMu.Lock()
-	if flushTicker != nil {
-		flushTicker.Stop()
-		flushTicker = nil
+	if stopCh != nil {
 		close(stopCh)
 		stopCh = nil
 	}
 	statsMu.Unlock()
+	wg.Wait()
 	Flush()
 }
 
-// Flush 把内存累计值合并写库; 失败保留内存, 下次重试。
+// Flush 把当前增量写库; 失败原样退回内存, 下一轮重试。
 func Flush() {
-	if !dirty.Load() {
-		return
-	}
-	db, err := storage.DB()
-	if err != nil {
-		return
-	}
+	flushMu.Lock()
+	defer flushMu.Unlock()
 
+	batch := takeDirty()
+	if batch.empty() {
+		return
+	}
+	if err := writeBatch(batch); err != nil {
+		batch.restore()
+	}
+}
+
+type groupDelta struct {
+	id, name string
+	msg      int64
+}
+
+type peerDelta struct {
+	id  string
+	msg int64
+}
+
+type dayDelta struct {
+	day                string
+	recv, sent, button int64
+}
+
+type batch struct {
+	groups []groupDelta
+	peers  []peerDelta
+	days   []dayDelta
+	trim   bool
+}
+
+func (b batch) empty() bool {
+	return len(b.groups) == 0 && len(b.peers) == 0 && len(b.days) == 0 && !b.trim
+}
+
+// takeDirty 取走增量并清空脏标记: 拿到手的这段时间里新来的计数会累加到归零之后, 不会被覆盖。
+func takeDirty() batch {
 	statsMu.Lock()
 	defer statsMu.Unlock()
 
+	b := batch{
+		groups: make([]groupDelta, 0, len(dirtyGroups)),
+		peers:  make([]peerDelta, 0, len(dirtyPeers)),
+		days:   make([]dayDelta, 0, len(dirtyDays)),
+	}
+	for id := range dirtyGroups {
+		delete(dirtyGroups, id)
+		g := groups[id]
+		if g == nil || (g.pending == 0) {
+			continue
+		}
+		b.groups = append(b.groups, groupDelta{id: id, name: g.name, msg: g.pending})
+		g.pending = 0
+	}
+	for id := range dirtyPeers {
+		delete(dirtyPeers, id)
+		p := peers[id]
+		if p == nil || p.pending == 0 {
+			continue
+		}
+		b.peers = append(b.peers, peerDelta{id: id, msg: p.pending})
+		p.pending = 0
+	}
+	for day := range dirtyDays {
+		delete(dirtyDays, day)
+		d := daily[day]
+		if d == nil || (d.dRecv == 0 && d.dSent == 0 && d.dButton == 0) {
+			continue
+		}
+		b.days = append(b.days, dayDelta{day: day, recv: d.dRecv, sent: d.dSent, button: d.dButton})
+		d.dRecv, d.dSent, d.dButton = 0, 0, 0
+	}
+	if today := todayOf(time.Now()); lastTrim != today {
+		lastTrim = today
+		b.trim = true
+	}
+	return b
+}
+
+func (b batch) restore() {
+	statsMu.Lock()
+	defer statsMu.Unlock()
+	for _, d := range b.groups {
+		if g := groups[d.id]; g != nil {
+			g.pending += d.msg
+			dirtyGroups[d.id] = struct{}{}
+		}
+	}
+	for _, d := range b.peers {
+		if p := peers[d.id]; p != nil {
+			p.pending += d.msg
+			dirtyPeers[d.id] = struct{}{}
+		}
+	}
+	for _, d := range b.days {
+		if day := daily[d.day]; day != nil {
+			day.dRecv += d.recv
+			day.dSent += d.sent
+			day.dButton += d.button
+			dirtyDays[d.day] = struct{}{}
+		}
+	}
+}
+
+func writeBatch(b batch) error {
+	db, err := storage.DB()
+	if err != nil {
+		return err
+	}
 	tx, err := db.Begin()
 	if err != nil {
-		return
+		return err
 	}
 	defer tx.Rollback()
 
-	for id, g := range groups {
-		if _, err := tx.Exec(
-			`INSERT INTO stats_groups (group_id, name, msg_count) VALUES (?, ?, ?)
-			 ON CONFLICT(group_id) DO UPDATE SET name=excluded.name, msg_count=excluded.msg_count`,
-			id, g.name, g.msg); err != nil {
-			return
+	for _, d := range b.groups {
+		if _, err := tx.Exec(groupUpsert, d.id, d.name, d.msg); err != nil {
+			return err
 		}
 	}
-	for id, c := range peers {
-		if _, err := tx.Exec(
-			`INSERT INTO stats_peers (peer_id, msg_count) VALUES (?, ?)
-			 ON CONFLICT(peer_id) DO UPDATE SET msg_count=excluded.msg_count`,
-			id, c); err != nil {
-			return
+	for _, d := range b.peers {
+		if _, err := tx.Exec(peerUpsert, d.id, d.msg); err != nil {
+			return err
 		}
 	}
-	for d, s := range daily {
-		if _, err := tx.Exec(
-			`INSERT INTO stats_daily (day, recv, sent, button) VALUES (?, ?, ?, ?)
-			 ON CONFLICT(day) DO UPDATE SET recv=excluded.recv, sent=excluded.sent, button=excluded.button`,
-			d, s.recv, s.sent, s.button); err != nil {
-			return
+	for _, d := range b.days {
+		if _, err := tx.Exec(dayUpsert, d.day, d.recv, d.sent, d.button); err != nil {
+			return err
 		}
 	}
-	cutoff := time.Now().AddDate(0, 0, -keepDays).Format("2006-01-02")
-	if _, err := tx.Exec(`DELETE FROM stats_daily WHERE day < ?`, cutoff); err != nil {
-		return
+	if b.trim {
+		cutoff := time.Now().AddDate(0, 0, -keepDays).Format("2006-01-02")
+		if _, err := tx.Exec(`DELETE FROM stats_daily WHERE day < ?`, cutoff); err != nil {
+			return err
+		}
 	}
-	if err := tx.Commit(); err != nil {
-		return
-	}
-	dirty.Store(false)
+	return tx.Commit()
 }
 
 func load() error {
@@ -217,50 +353,52 @@ func load() error {
 
 	rows, err := db.Query(`SELECT group_id, name, msg_count FROM stats_groups`)
 	if err != nil {
-		return fmt.Errorf("load groups: %w", err)
+		return err
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var id, name string
 		var msg uint64
 		if err := rows.Scan(&id, &name, &msg); err != nil {
+			rows.Close()
 			return err
 		}
 		groups[id] = &groupStat{name: name, msg: msg}
 	}
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
 	rows, err = db.Query(`SELECT peer_id, msg_count FROM stats_peers`)
 	if err != nil {
-		return fmt.Errorf("load peers: %w", err)
+		return err
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var id string
 		var msg uint64
 		if err := rows.Scan(&id, &msg); err != nil {
+			rows.Close()
 			return err
 		}
-		peers[id] = msg
+		peers[id] = &peerStat{msg: msg}
 	}
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
 	rows, err = db.Query(`SELECT day, recv, sent, button FROM stats_daily`)
 	if err != nil {
-		return fmt.Errorf("load daily: %w", err)
+		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var d string
+		var day string
 		var recv, sent, button uint64
-		if err := rows.Scan(&d, &recv, &sent, &button); err != nil {
+		if err := rows.Scan(&day, &recv, &sent, &button); err != nil {
 			return err
 		}
-		daily[d] = &dayStat{recv: recv, sent: sent, button: button}
+		daily[day] = &dayStat{recv: recv, sent: sent, button: button}
 	}
 	return rows.Err()
 }
@@ -285,7 +423,7 @@ func ensureSchema(db *sql.DB) error {
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
-			return fmt.Errorf("ensure stats schema: %w", err)
+			return err
 		}
 	}
 	return nil
@@ -315,7 +453,7 @@ type View struct {
 	TopGroups []GroupRow `json:"top_groups"`
 }
 
-// Snapshot 组装当前统计快照。
+// Snapshot 组装当前统计快照; 读的是内存权威值, 不碰库。
 func Snapshot() View {
 	statsMu.Lock()
 	defer statsMu.Unlock()

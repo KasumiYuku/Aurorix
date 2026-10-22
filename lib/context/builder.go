@@ -2,6 +2,7 @@ package context
 
 import (
 	"errors"
+	"fmt"
 	"github.com/KasumiYuku/Aurorix/lib/contract"
 	"github.com/KasumiYuku/Aurorix/lib/message"
 	"strings"
@@ -44,6 +45,11 @@ func (b *MsgBuilder) AtQuote(openid string, newline ...bool) *MsgBuilder {
 
 func (b *MsgBuilder) AtAll(newline ...bool) *MsgBuilder {
 	return b.Add(b.m.AtAll(newline...))
+}
+
+// AtAvatar 追加"带头像的艾特"部件（见 MessageManager.AtAvatar）。
+func (b *MsgBuilder) AtAvatar(openid string, px ...int) *MsgBuilder {
+	return b.Add(b.m.AtAvatar(openid, px...))
 }
 
 func (b *MsgBuilder) Markdown(s string) *MsgBuilder {
@@ -138,13 +144,18 @@ func (b *MsgBuilder) plan() []Sender {
 	useMarkdown := b.kb != nil
 	hasText, hasImage := false, false
 	for _, p := range b.parts {
-		switch p.(type) {
+		switch v := p.(type) {
 		case *message.MarkdownMessage:
 			useMarkdown = true
 		case *message.TextMessage:
 			hasText = true
 		case *message.ImageMessage:
 			hasImage = true
+		case *message.AtMessage:
+			// 带头像的艾特是 markdown 语法, 放在纯文本消息里会露出一串原始符号。
+			if v.AvatarURL != "" {
+				useMarkdown = true
+			}
 		}
 	}
 	if globalMD && (hasText || hasImage) {
@@ -190,8 +201,17 @@ func (b *MsgBuilder) plan() []Sender {
 					inline.WriteString("@everyone")
 				}
 			} else {
-				if v.Quote && useMarkdown {
-					inline.WriteString("> ")
+				if useMarkdown {
+					if v.Quote {
+						inline.WriteString("> ")
+					}
+					if v.Heading > 0 {
+						inline.WriteString(strings.Repeat("#", v.Heading))
+						inline.WriteByte(' ')
+					}
+					if v.AvatarURL != "" {
+						fmt.Fprintf(&inline, "![cornerRadius=100 #%dpx #%dpx](%s) ", v.AvatarPx, v.AvatarPx, v.AvatarURL)
+					}
 				}
 				inline.WriteString("<@")
 				inline.WriteString(v.OpenID)
