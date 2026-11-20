@@ -1,6 +1,5 @@
 package constant
 
-// RoleRequired 定义自定义类型
 type RoleRequired string
 
 const (
@@ -11,7 +10,6 @@ const (
 
 func (require RoleRequired) CanUse(user RoleRequired) bool {
 	if require == "" {
-		// 留空时默认为成员可用
 		return true
 	}
 	switch require {

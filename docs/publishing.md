@@ -1,0 +1,116 @@
+# 插件开发流程与发布
+
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [图床](assets.md) · [配置](configuration.md) · [API 参考](api.md) · [发布](publishing.md)
+
+## 完整开发流程
+
+```text
+aurx new-plugin <名字>    1. 生成骨架
+aurx add <模块路径>       2. 接入 main.go
+编辑 plugins/<名字>/      3. 写指令逻辑 (IDE 自动补全, 见开发文档首页)
+aurx run                 4. 编译并启动, 群内验证
+改 → aurx run             5. 迭代: Go 是编译型语言, 每次改动重新编译
+```
+
+### 开发环境
+
+- 不需要独立 SDK：框架即 SDK，`go.mod` replace 引用本地框架，IDE 直接解析全部 API（见[开发文档首页](README.md#开发环境)）
+- 参考实现：框架 `plugins/` 下官方插件（bind / echo / imagegen / uptime）源码
+
+## 插件的两种载体
+
+| 载体 | 适用 | 接入 |
+|---|---|---|
+| 实例内 `plugins/` 目录 | 自己用 / 本地开发 | `aurx add <实例module>/plugins/名字` |
+| 独立 Go module | 发布给他人 | `aurx add github.com/某作者/某插件` |
+
+## 导入已有插件
+
+### 本地插件文件夹
+
+别人给的、或你以前写的插件目录，直接放进实例：
+
+```bash
+cp -r ~/my-plugin mybot/plugins/my-plugin
+cd mybot
+aurx add mybot/plugins/my-plugin   # mybot 是当前实例 go.mod 的 module 名
+aurx run                           # 编译进二进制并启动
+```
+
+要求：目录含合法的 Go 包（`package xxx` + `init()` 中 `plugin.Register`）。如果不确定路径，以 `aurx new-plugin` 打印的 `接入: aurx add ...` 为准；`aurx add` 接收的是 Go import 路径，不是任意文件系统路径。
+
+### 网络模块
+
+```bash
+aurx add github.com/某作者/某插件   # 注入 import + go get 拉依赖
+aurx run
+```
+
+## 发布插件
+
+把插件做成独立 Go module 推 GitHub 并打 tag：
+
+```bash
+# 插件仓库
+go mod init github.com/某作者/某插件
+# 在包内 init() 中 plugin.Register(...)
+git tag v0.1.0 && git push --tags
+```
+
+使用者即可 `aurx add github.com/某作者/某插件`。
+
+**发布规范**：
+
+- 插件 = 独立目录 + 独立 package，`Id` 全局唯一
+- 只依赖框架公开 API（`lib/plugin` `lib/context` `lib/constant` `lib/schedule` `lib/storage`），不触碰框架内部实现
+- 敏感配置（密钥等）用 `Config` 声明，不硬编码进源码
+- 指令名小写英文为主，中文别名放 `Aliases`
+- 对外请求走 `ctx.Request`，勿自建裸 `http.Client`
+- 带 Markdown 模板的插件：模板放包内 `templates/markdown/` 并挂 `TemplateFS`，**确认模板 `.md` 已进 git**（仓库 `.gitignore` 若忽略 `*.md` 需显式放行，否则拉取者编译因缺 embed 文件失败）
+- 模板需要点击填充输入框时，优先用 `{{inline "显示文字" "命令"}}` 或 `{{inline label command}}`，不要在每个模板里手写整段 `<qqbot-cmd-input .../>`
+
+## 版本与发布
+
+框架和插件都是标准 Go module，版本就是 **git tag**（语义化 `vX.Y.Z`）。
+
+**发版方**
+
+```bash
+git tag v0.2.0        # 改完标注一个版本
+git push --tags       # 推上去, 使用方 go get 才拿得到这个版本
+```
+
+- 框架（本仓）发新 tag 后，插件的 `require github.com/KasumiYuku/Aurorix` 才升得动。想让插件用上新 API：先在框架仓打 tag，再去插件仓把它 `require` 的版本改过去。
+- 只改文档 / 注释这类不动 API 的改动，走补丁号（`v0.1.1`）即可。
+- **改了前端要连产物一起提交**：`lib/admin` 用 `//go:embed dist` 内嵌管理台，改完 `webui/` 先 `make web`，再把 `lib/admin/dist` 一起提交 —— 产物不在库里，别人 `go get` 下来编译会直接失败（框架 CI 里有一条专门校验产物与源码一致）。
+
+**使用方**
+
+```bash
+aurx update                      # 更新实例依赖的全部模块 + 编译校验
+aurx update all                  # 同上
+aurx update 某插件               # 只更新指定模块, 名字可只写一段(如 aurorix-music-plugin / music)
+aurx update -n                   # 只看看会更新什么, 不动文件
+```
+
+`aurx update` 内部就是 `go get -u` + `go mod tidy` + `go build ./...`；它不动 replace 到本地目录的模块（那是你自己的代码）。在**插件源码目录**里跑 `aurx update` 就是更新该插件自己的依赖。更新完用 `aurx run` 重启实例。
+
+**CI**：框架仓与各插件仓都带 `.github/workflows/ci.yml`（格式 / 静态检查 / 竞态测试 / 构建；框架额外校验内嵌产物是否与源码一致）。发版前先确认它是绿的。
+
+## 移除插件
+
+```bash
+rm -rf mybot/plugins/my-plugin     # 删除目录
+# 同时从 main.go 删掉对应空导入行
+aurx run                           # 重新编译
+```
+
+## 修改框架 / 前端 / 插件后
+
+| 你改了 | 需要做什么 |
+|---|---|
+| 插件代码 | 重新编译实例：`aurx run` |
+| 新增插件目录 | `aurx add` 或手动加空导入 |
+| 框架代码（lib/） | replace 指向本地，改动即时可见，重编实例 |
+| 管理台前端（框架 webui/） | `make web`（即 `cd webui && pnpm build`），再重编实例 |
+| 更新框架 | `git pull`，重编实例；官方插件有变按报错调整 |

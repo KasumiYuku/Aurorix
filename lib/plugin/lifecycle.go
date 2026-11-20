@@ -1,11 +1,10 @@
 package plugin
 
 import (
-	"Plrx/lib/context"
+	"github.com/KasumiYuku/Aurorix/lib/context"
 	"sync"
 )
 
-// 处理入群请求
 type joinGroupHandle func(*context.ApplyJoinGroupContext) error
 
 var joinGroupHandleFunc joinGroupHandle

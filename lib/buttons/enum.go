@@ -20,9 +20,13 @@ func IsVaildActionType(actionType ButtonAction) bool {
 	return int(Link) >= 0 && int(actionType) <= int(Command)
 }
 
+// ButtonStyle 是 QQ 按钮的 render_style 取值。
 type ButtonStyle int
 
 const (
 	Gray ButtonStyle = iota
 	Blue
+	GraySolid
+	BlueSolid
+	BlueText
 )

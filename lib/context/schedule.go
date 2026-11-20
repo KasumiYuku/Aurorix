@@ -1,19 +1,19 @@
 package context
 
 import (
-	"Plrx/lib/qqapi"
 	"time"
+
+	"github.com/KasumiYuku/Aurorix/lib/api"
 )
 
 // ScheduleContext 定时任务回调上下文 (无关联用户消息, 发送需主动推送)
 type ScheduleContext struct {
 	*Context
-	JobId    string
-	PluginId string
-	FiredAt  time.Time
+	JobId   string
+	FiredAt time.Time
 }
 
-func (ctx *ScheduleContext) Init(client *qqapi.Client) {
+func (ctx *ScheduleContext) Init(client *api.BotAPI) {
 	ctx.Context = &Context{}
 	ctx.Context.Init("", "", client)
 	ctx.FiredAt = time.Now()

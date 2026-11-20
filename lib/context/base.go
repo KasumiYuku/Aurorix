@@ -1,10 +1,10 @@
 package context
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/qqapi"
-	"Plrx/lib/requests"
-	"Plrx/lib/storage"
+	"github.com/KasumiYuku/Aurorix/lib/api"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/requests"
+	"github.com/KasumiYuku/Aurorix/lib/storage"
 )
 
 type Context struct {
@@ -14,40 +14,34 @@ type Context struct {
 	PluginStorage  *storage.Store
 	CommandStorage *storage.Store
 	UserStorage    *storage.Store
-	GroupStorage   *storage.Store
+	// TargetStorage 本次会话的存储命名空间: 群/单聊/子频道/频道私信各算各的, 不共桶。
+	TargetStorage *storage.Store
 }
 
-// 初始化Context对象及MessageManager对象
-func (context *Context) Init(messageId, eventId string, qqapi *qqapi.Client) {
-	context.MessageManager = &MessageManager{
+// Init 初始化 Context 与 MessageManager。
+func (c *Context) Init(messageId, eventId string, qqapi *api.BotAPI) {
+	c.MessageManager = &MessageManager{
 		MessageId: messageId,
 		EventId:   eventId,
 		Qapi:      qqapi,
 	}
-	context.Request = qqapi.Request
-	context.GlobalStorage = storage.Global()
+	c.Request = qqapi.Request
+	c.GlobalStorage = storage.Global()
 }
 
-// BindStorage exposes namespaces bound to the command currently being handled.
-func (context *Context) BindStorage(pluginID, commandID string) {
-	context.PluginStorage = storage.Plugin(pluginID)
-	context.CommandStorage = storage.Command(pluginID, commandID)
+// BindStorage 暴露当前正在处理的指令所绑定的命名空间。
+func (c *Context) BindStorage(pluginID, commandID string) {
+	c.PluginStorage = storage.Plugin(pluginID)
+	c.CommandStorage = storage.Command(pluginID, commandID)
 }
 
-func (context *Context) SetGroupId(id string) {
-	context.MessageManager.GroupId = id
-	if id != "" {
-		context.GroupStorage = storage.Group(id)
+// SetTarget 绑定这次回复的会话: 场景、会话 ID 与触发者。
+func (c *Context) SetTarget(target constant.Target) {
+	c.MessageManager.Target = target
+	if target.ID != "" {
+		c.TargetStorage = storage.Scene(target.Scene, target.ID)
 	}
-}
-
-func (context *Context) SetUserId(id string) {
-	context.MessageManager.UserId = id
-	if id != "" {
-		context.UserStorage = storage.User(id)
+	if target.User != "" {
+		c.UserStorage = storage.User(target.User)
 	}
-}
-
-func (context *Context) SetMessageOrigin(origin constant.MessageOrigin) {
-	context.MessageManager.Target = origin
 }

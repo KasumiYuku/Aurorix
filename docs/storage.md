@@ -1,346 +1,148 @@
-# 数据存储 API (`lib/storage`)
+# 配置热更与数据存储
 
-插件可通过 Context 上的存储对象, 将数据持久化到 SQLite。
+> 文档导航：[开发文档首页](README.md) · [指令](commands.md) · [消息](message.md) · [事件](events.md) · [定时任务](schedule.md) · [存储](storage.md) · [推送](push.md) · [图床](assets.md) · [配置](configuration.md) · [API 参考](api.md) · [发布](publishing.md)
 
-包路径: `Plrx/lib/storage`  
-上下文字段: `*context.Context` (`Plrx/lib/context`)
+## 插件配置（热更）
 
-底层使用纯 Go 驱动 `modernc.org/sqlite`, 无需 CGO。默认数据库文件为 `bot.db`, 可在 `config.json` 中通过 `database` 字段自定义路径。
-
----
-
-## 快速示例
+插件声明配置表单，管理台据此渲染，保存即生效、无需重启：
 
 ```go
-package myplugin
-
-import (
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
-	"fmt"
-)
-
-func init() {
-	plugin.Register(&plugin.Plugin{
-		Id: "myplugin",
-		Commands: []*plugin.Command{
-			{
-				Prefix: "/score",
-				Handle: scoreHandle,
-			},
-		},
-	})
-}
-
-type UserScore struct {
-	Points int    `json:"points"`
-	Title  string `json:"title"`
-}
-
-func scoreHandle(ctx *context.MessageContext) error {
-	// 读取当前用户积分
-	var score UserScore
-	found, err := ctx.UserStorage.Get("score", &score)
-	if err != nil {
-		return err
-	}
-	if !found {
-		score = UserScore{Points: 0, Title: "新手"}
-	}
-
-	score.Points++
-	if err := ctx.UserStorage.Set("score", score); err != nil {
-		return err
-	}
-
-	// 群聊计数
-	var groupCount int
-	_, _ = ctx.GroupStorage.Get("cmd_count", &groupCount)
-	groupCount++
-	_ = ctx.GroupStorage.Set("cmd_count", groupCount)
-
-	return ctx.Text(fmt.Sprintf("你的积分: %d\n本群调用次数: %d", score.Points, groupCount)).Send()
-}
-```
-
----
-
-## 配置
-
-`config.json` 可选字段:
-
-```json
-{
-  "port": 8080,
-  "appid": "10000",
-  "secret": "11111",
-  "proxy": "https://api.sgroup.qq.com",
-  "database": "bot.db"
-}
-```
-
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `database` | SQLite 文件路径 | `bot.db` |
-
-应用启动时调用 `storage.Open`, 退出时调用 `storage.Close`。数据库文件及 WAL 临时文件 (`.db` / `.db-shm` / `.db-wal`) 已加入 `.gitignore`。
-
-### 插件 `init()` 中使用
-
-插件包的 `init()` 会在 `main` 的 `storage.Open` **之前**执行。存储层会在首次读写时自动打开数据库 (默认 `bot.db`), 因此可直接在 `init()` 里 `Get`/`Set`:
-
-```go
-func init() {
-	var enabled bool
-	found, err := storage.Global().Get("feature_x", &enabled)
-	// ...
-}
-```
-
-注意: 若 `config.json` 里 `database` 不是默认 `bot.db`, 请避免在 `init()` 中依赖自定义路径; 此时应把读库逻辑放到指令处理函数或 `main` 启动之后。
-
----
-
-## Context 暴露的存储对象
-
-指令处理函数 (`*context.MessageContext`) 与按钮回调 (`*context.CallbackContext`) 均可使用下列字段 (二者均嵌入 `*context.Context`):
-
-| 字段 | 作用域 | 隔离维度 | 绑定时机 |
-|------|--------|----------|----------|
-| `ctx.GlobalStorage` | 全局 | 全机器人共享 | `Init` |
-| `ctx.PluginStorage` | 插件 | 当前插件 ID | `BindStorage` |
-| `ctx.CommandStorage` | 指令 | 插件 ID + 指令路径 | `BindStorage` |
-| `ctx.UserStorage` | 用户 | 当前 `UserId` | `SetUserId` |
-| `ctx.GroupStorage` | 群聊 | 当前 `GroupId` | `SetGroupId` |
-
-### 命名空间规则
-
-| 作用域 | scope | namespace 示例 |
-|--------|-------|----------------|
-| 全局 | `global` | `global` |
-| 插件 | `plugin` | `echo` |
-| 指令 | `command` | `bind:/bind` |
-| 指令 (含子指令) | `command` | `bind:/bind confirm` |
-| 用户 | `user` | `用户 OpenID` |
-| 群聊 | `group` | `群 OpenID` |
-
-子指令会按完整路径隔离。例如 `/bind` 与 `/bind confirm` 使用不同的 `CommandStorage` 命名空间。
-
-### 注意事项
-
-- 私聊场景通常没有 `GroupId`, 此时 `ctx.GroupStorage` 可能为 `nil`, 使用前请判断。
-- `UserStorage` / `GroupStorage` 仅在对应 ID 非空时绑定。
-- 回调上下文也会通过 `SetUserId` / `SetGroupId` 绑定用户层与群聊层存储。
-
----
-
-## Store API
-
-所有作用域共享同一套方法:
-
-```go
-type Store struct { /* 内部字段 */ }
-
-func (store *Store) Set(key string, value any) error
-func (store *Store) Get(key string, target any) (found bool, err error)
-func (store *Store) Has(key string) (bool, error)
-func (store *Store) Delete(key string) error
-func (store *Store) Clear() error
-```
-
-### `Set`
-
-将任意可 JSON 序列化的值写入指定 key。已存在则覆盖。
-
-```go
-err := ctx.PluginStorage.Set("enabled", true)
-err = ctx.CommandStorage.Set("last_args", []string{"a", "b"})
-err = ctx.UserStorage.Set("profile", map[string]any{
-	"name": "Alice",
-	"lv":   3,
+plugin.Register(&plugin.Plugin{
+	Id: "myplugin",
+	Config: []plugin.ConfigField{
+		{Key: "api_key", Label: "API 密钥", Type: "password", Required: true},
+		{Key: "timeout", Label: "超时秒数", Type: "number", Placeholder: "30"},
+	},
+	ValidateConfig: func(v map[string]any) error {
+		if v["timeout"].(float64) <= 0 {
+			return errors.New("timeout 必须大于 0")
+		}
+		return nil
+	},
+	ApplyConfig: func(v map[string]any) error {
+		// 应用新配置, 无需重启
+		return nil
+	},
 })
 ```
 
-### `Get`
+| ConfigField | 说明 |
+|---|---|
+| `Key` | 配置项标识 |
+| `Label` | 表单展示名 |
+| `Description` | 帮助说明 |
+| `Type` | 表单类型：`string` / `number` / `password` 等 |
+| `Placeholder` | 占位提示 |
+| `Required` | 必填 |
 
-读取并反序列化到 `target` (必须为非 nil 指针)。
+流程：管理台提交 → `ValidateConfig` 校验（返回 error 拒绝）→ 保存 → `ApplyConfig` 生效。配置存放在 `config.json` 的 `plugin_settings` 中。
 
-- `found == false`: key 不存在 (不是错误)
-- `err != nil`: 读库或反序列化失败
+## 数据存储
 
-```go
-var enabled bool
-found, err := ctx.PluginStorage.Get("enabled", &enabled)
-if err != nil {
-	return err
-}
-if !found {
-	enabled = false
-}
-```
+PostgreSQL 持久化，按命名空间隔离。包路径 `github.com/KasumiYuku/Aurorix/lib/storage`，连接串由配置 `database` 指定（`postgres://用户:密码@主机:端口/库名?sslmode=disable`）。
 
-### `Has`
-
-判断 key 是否存在。
+### 命名空间
 
 ```go
-ok, err := ctx.UserStorage.Has("score")
+ctx.PluginStorage    // 当前插件
+ctx.CommandStorage   // 当前指令
+ctx.UserStorage      // 当前用户
+ctx.TargetStorage    // 当前会话（群 / 单聊 / 子频道 / 频道私信）
+ctx.GlobalStorage    // 全局
+
+storage.Plugin("myplugin")   // 任意位置按插件取
+storage.Command("myplugin", "cmd")
+storage.User("用户OpenID")
+storage.Scene(constant.SceneGroup, "群OpenID")
+storage.Scene(constant.SceneChannel, "子频道ID")
+storage.Global()
 ```
 
-### `Delete`
+### Store 方法
 
-删除单个 key。
+| 方法 | 说明 |
+|---|---|
+| `Set(key, value)` | 写入，任意 JSON 序列化对象 |
+| `Get(key, &target)` | 读取到目标对象，返回 `(found, err)` |
+| `Has(key)` | 存在性检查 |
+| `Delete(key)` | 删除 |
+| `Clear()` | 清空当前命名空间 |
+
+零保留键，所有 key 自由使用。底层 `jackc/pgx/v5`，连接池默认 16 条。
+
+### 示例
 
 ```go
-err := ctx.CommandStorage.Delete("tmp")
-```
-
-### `Clear`
-
-清空当前命名空间下全部数据 (不影响其他作用域/命名空间)。
-
-```go
-err := ctx.PluginStorage.Clear()
-```
-
----
-
-## 直接使用 storage 包
-
-一般推荐通过 Context 字段访问。若需在非请求路径 (如 `init`、定时任务) 中读写, 可直接构造:
-
-```go
-import "Plrx/lib/storage"
-
-// 全局
-store := storage.Global()
-
-// 指定插件
-store = storage.Plugin("myplugin")
-
-// 指定指令路径
-store = storage.Command("myplugin", "/score")
-store = storage.Command("bind", "/bind confirm")
-
-// 指定用户 / 群
-store = storage.User("user-openid")
-store = storage.Group("group-openid")
-
-_ = store.Set("key", "value")
-```
-
-前提: 进程内已调用 `storage.Open(...)` (主程序启动时会完成)。
-
----
-
-## 表结构
-
-```sql
-CREATE TABLE IF NOT EXISTS kv_data (
-    scope TEXT NOT NULL,
-    namespace TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value BLOB NOT NULL,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (scope, namespace, key)
-);
-```
-
-- `value` 以 JSON 二进制存储
-- 主键 `(scope, namespace, key)` 保证同一命名空间下 key 唯一
-- 不同作用域之间完全隔离
-
----
-
-## 使用建议
-
-1. **选对作用域**
-   - 机器人级开关、共享缓存 → `GlobalStorage`
-   - 插件配置、插件内部状态 → `PluginStorage`
-   - 单条指令会话/临时状态 → `CommandStorage`
-   - 用户个人数据 (积分、绑定信息) → `UserStorage`
-   - 群设置、群统计 → `GroupStorage`
-
-2. **key 命名**: 使用有意义的短字符串, 如 `score`、`bind_uid`、`settings`。
-
-3. **结构体优先**: 复杂数据用结构体 + `json` tag, 便于演进字段。
-
-4. **先查再写**: `Get` 返回 `found=false` 时自行初始化默认值, 再 `Set`。
-
-5. **注意 nil**: 私聊中不要直接调用 `ctx.GroupStorage` 方法, 先判断:
-
-```go
-if ctx.GroupStorage != nil {
-	_ = ctx.GroupStorage.Set("last_cmd", "/score")
+func remember(ctx *context.MessageContext) error {
+	var count int
+	ctx.PluginStorage.Get("count", &count)
+	count++
+	ctx.PluginStorage.Set("count", count)
+	return ctx.Text(fmt.Sprintf("第 %d 次", count)).Send()
 }
 ```
 
----
+## 管理台统计的落库语义
 
-## 完整示例: 用户绑定 UID
+会话 / 每日计数在内存累加，后台协程每 5 秒把**变动过的那几行**按增量写库一次（`msg_count = msg_count + ?`，不是整表重写）。
 
-```go
-package bind
+- 消息热路径不碰数据库：单条消息的开销是内存自增加一次脏标记
+- 落库失败时增量原样退回内存，下一轮重试，不丢也不重
+- 正常退出时 `stats.Stop()` 同步落完最后一批；进程被强杀最多丢最后一个 5 秒窗口的计数
 
-import (
-	"Plrx/lib/context"
-	"Plrx/lib/plugin"
-	"strings"
-)
+### 好友数是怎么算的
 
-func init() {
-	plugin.Register(&plugin.Plugin{
-		Id: "bind",
-		Commands: []*plugin.Command{
-			{
-				Prefix: "/bind",
-				Handle: doBind,
-			},
-			{
-				Prefix: "/myuid",
-				Handle: showUID,
-			},
-		},
-	})
-}
+平台**没有**好友列表接口，所以好友数只能靠事件与消息一点点补：
 
-func doBind(ctx *context.MessageContext) error {
-	args := strings.Fields(ctx.Content)
-	if len(args) < 2 {
-		return ctx.Text("用法: /bind <UID>").Send()
-	}
-	uid := args[1]
-	if err := ctx.UserStorage.Set("game_uid", uid); err != nil {
-		return err
-	}
-	// 可选: 记入插件级索引
-	_ = ctx.PluginStorage.Set("last_bind_user", ctx.UserId)
-	return ctx.Text("绑定成功: " + uid).Send()
-}
+- 收到 `FRIEND_ADD` → 记一条（`friend = true`），没说过话的好友也算进来
+- 收到 `FRIEND_DEL` → 只摘好友标记，历史消息数留着（活跃会话该是多少还是多少）
+- **单聊来消息** → 落库时顺手把 `friend` 置真：漏掉加好友事件的人，第一次说话就补上了
 
-func showUID(ctx *context.MessageContext) error {
-	var uid string
-	found, err := ctx.UserStorage.Get("game_uid", &uid)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return ctx.Text("尚未绑定, 请使用 /bind <UID>").Send()
-	}
-	return ctx.Text("你的 UID: " + uid).Send()
-}
+判断"这个人是不是已经统计过"不需要额外查询：单聊消息走的是会话计数那条路（内存 `map` 自增，5 秒批量 upsert），
+数据库那边 `ON CONFLICT (scene, id)` 天然幂等。所以「来一条消息就补录」是零查询成本、也不拖慢业务。
+
+口径上的区别：`friends` 是**当前好友位**上的人，`peers` 是**有过单聊往来**的人（含已删好友的历史），
+管理台概览里的「好友」用前者，活跃会话排行里两类都会出现。
+## 从 SQLite 迁移
+
+旧版本把数据存在单个 `bot.db` 文件里，现在全部落在 PostgreSQL。迁移是一次性的，可以反复演练：
+
+```bash
+# 1. 建库建角色（按需改名字）
+sudo -u postgres psql -c "CREATE ROLE aurorix LOGIN PASSWORD '换成你的密码'"
+sudo -u postgres psql -c "CREATE DATABASE aurorix OWNER aurorix"
+
+# 2. 先看它会建哪些表、哪些索引（不写库）
+go run ./tools/migrate-to-pg -sqlite /旧部署/data/bot.db \
+  -postgres "postgres://aurorix:密码@127.0.0.1:5432/aurorix?sslmode=disable" -dry-run
+
+# 3. 真迁移：逐表搬完当场比对行数，再逐行比对抽样内容
+go run ./tools/migrate-to-pg -sqlite /旧部署/data/bot.db \
+  -postgres "postgres://aurorix:密码@127.0.0.1:5432/aurorix?sslmode=disable" -sample 500
+
+# 4. 想全表核对（表小的时候）就把 -sample 给到足够大
+go run ./tools/migrate-to-pg ... -sample 1000000
 ```
 
----
+迁移器只读旧库（以 `mode=ro` 打开），不删不改。想再演练一遍就先 `DROP DATABASE aurorix` 重建，重复往同一张已有数据的表里写会直接主键冲突报错（宁可停下也不覆盖）。行数不一致或抽样内容对不上会直接退出并打印是哪张表哪一行哪一列。
 
-## 相关文件
+切换顺序：
 
-| 路径 | 说明 |
-|------|------|
-| `lib/storage/storage.go` | 存储实现 |
-| `lib/storage/storage_test.go` | 单元测试 |
-| `lib/context/base.go` | Context 绑定字段 |
-| `lib/middleware/handle.go` | 消息/回调分发时注入存储 |
-| `lib/plugin/register.go` | 子指令路径更新 `CommandStorage` |
-| `lib/config/config.go` | `database` 配置 |
-| `main.go` | 启动 Open / 退出 Close |
+1. 停机器人（避免迁移过程中还有写入）
+2. 跑迁移器
+3. 改 `config.json` 的 `database` 指向新库
+4. 启动，确认业务正常
+5. **旧 `bot.db` 至少保留一周**，确认无问题再删
+
+曲库 `phi.db` 不动：它是随插件分发的只读资产，继续用 SQLite。
+
+## 测试怎么跑
+
+单元测试直接连一个真实的 PostgreSQL，每个测试用独立 schema：
+
+```bash
+export AURORIX_TEST_DATABASE="postgres://postgres:postgres@127.0.0.1:5432/aurorix?sslmode=disable"
+go test ./... -count=1
+```
+
+CI 里由 `postgres:18` service 提供这个库。`make test` 在没有该变量时会直接报错，不会静默跳过数据库测试。

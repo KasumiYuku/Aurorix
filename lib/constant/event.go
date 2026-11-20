@@ -3,18 +3,42 @@ package constant
 type EventType string
 
 const (
-	INTERACTION_CREATE      EventType = "INTERACTION_CREATE"
-	C2C_MESSAGE_CREATE      EventType = "C2C_MESSAGE_CREATE"
 	GROUP_AT_MESSAGE_CREATE EventType = "GROUP_AT_MESSAGE_CREATE"
 	GROUP_MESSAGE_CREATE    EventType = "GROUP_MESSAGE_CREATE"
+	C2C_MESSAGE_CREATE      EventType = "C2C_MESSAGE_CREATE"
+	INTERACTION_CREATE      EventType = "INTERACTION_CREATE"
 	GROUP_JOIN_REQUEST      EventType = "GROUP_JOIN_REQUEST"
+	MESSAGE_AUDIT_PASS      EventType = "MESSAGE_AUDIT_PASS"
+	MESSAGE_AUDIT_REJECT    EventType = "MESSAGE_AUDIT_REJECT"
+	GROUP_MEMBER_ADD        EventType = "GROUP_MEMBER_ADD"
+	GROUP_MEMBER_REMOVE     EventType = "GROUP_MEMBER_REMOVE"
+	GROUP_ADD_ROBOT         EventType = "GROUP_ADD_ROBOT"
+	GROUP_DEL_ROBOT         EventType = "GROUP_DEL_ROBOT"
+	GROUP_MSG_RECEIVE       EventType = "GROUP_MSG_RECEIVE"
+	GROUP_MSG_REJECT        EventType = "GROUP_MSG_REJECT"
+	C2C_MSG_RECEIVE         EventType = "C2C_MSG_RECEIVE"
+	C2C_MSG_REJECT          EventType = "C2C_MSG_REJECT"
+	FRIEND_ADD              EventType = "FRIEND_ADD"
+	FRIEND_DEL              EventType = "FRIEND_DEL"
+
+	AT_MESSAGE_CREATE     EventType = "AT_MESSAGE_CREATE"
+	MESSAGE_CREATE        EventType = "MESSAGE_CREATE"
+	DIRECT_MESSAGE_CREATE EventType = "DIRECT_MESSAGE_CREATE"
+
+	GUILD_MEMBER_ADD    EventType = "GUILD_MEMBER_ADD"
+	GUILD_MEMBER_REMOVE EventType = "GUILD_MEMBER_REMOVE"
+	GUILD_CREATE        EventType = "GUILD_CREATE"
+	GUILD_UPDATE        EventType = "GUILD_UPDATE"
+	GUILD_DELETE        EventType = "GUILD_DELETE"
+	CHANNEL_CREATE      EventType = "CHANNEL_CREATE"
+	CHANNEL_UPDATE      EventType = "CHANNEL_UPDATE"
+	CHANNEL_DELETE      EventType = "CHANNEL_DELETE"
 )
 
-func IsValidEventType(s string) bool {
-	switch EventType(s) {
-	case INTERACTION_CREATE, C2C_MESSAGE_CREATE, GROUP_AT_MESSAGE_CREATE, GROUP_MESSAGE_CREATE, GROUP_JOIN_REQUEST:
-		return true
-	default:
-		return false
-	}
-}
+type ChatType int
+
+const (
+	ChatTypeGroup   ChatType = 1
+	ChatTypeDirect  ChatType = 2
+	ChatTypeChannel ChatType = 3
+)

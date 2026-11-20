@@ -1,10 +1,9 @@
 package plugin
 
 import (
-	"Plrx/lib/constant"
-	"Plrx/lib/context"
-	"Plrx/lib/parser"
-	"reflect"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/context"
+	"io/fs"
 )
 
 type CommandHandleFunc func(*context.MessageContext) error
@@ -12,19 +11,22 @@ type PermissionDeniedHandleFunc func(*context.MessageContext) error
 type CommandErrorHandleFunc func(*context.MessageContext, error) error
 
 type Command struct {
-	Prefix             string                     // 指令前缀
-	Role               constant.RoleRequired      // 最低权限
-	DisablePrivate     bool                       // 是否禁止在私聊中使用
-	Describe           string                     // 指令描述
-	Handle             CommandHandleFunc          // 处理函数
-	PermissionDenied   PermissionDeniedHandleFunc // 权限不足时调用
-	HandleError        CommandErrorHandleFunc     // Handle 返回错误后调用
-	PluginId           string                     // 属于的插件ID
-	SubCommand         []*Command                 // 子指令
-	SubCommandFallback CommandHandleFunc          // 子指令未找到时回退的函数
-	// 解析器
-	Parser       parser.Parser // 解析器接口
-	ParserTarget reflect.Type  // 解析模板
+	Prefix             string
+	Aliases            []string
+	Role               constant.RoleRequired
+	DisablePrivate     bool
+	NoFooter           bool
+	Describe           string
+	Handle             CommandHandleFunc
+	PermissionDenied   PermissionDeniedHandleFunc
+	HandleError        CommandErrorHandleFunc
+	PluginId           string
+	SubCommand         []*Command
+	SubCommandFallback CommandHandleFunc
+	Args               any
+	Rate               Rate
+
+	children map[string]*Command
 }
 
 type Plugin struct {
@@ -35,6 +37,15 @@ type Plugin struct {
 	Config         []ConfigField
 	ValidateConfig func(map[string]any) error
 	ApplyConfig    func(map[string]any) error
+	// OnConfigApplied 在配置真正生效之后调用(启动加载与面板保存都算); init() 里读到的永远只有出厂默认值。
+	OnConfigApplied func()
+	// TemplateFS 插件自带 markdown 模板, 目录约定 templates/markdown/*.md。
+	TemplateFS fs.FS
+
+	// HTMLTemplateFS 插件自带 HTML 模板, 目录约定 templates/html/*.html; 与 markdown 同构, 两个目录可以放在同一个 embed.FS 里。
+	HTMLTemplateFS fs.FS
+
+	WebUI *WebUI
 }
 
 type ConfigField struct {
@@ -44,4 +55,21 @@ type ConfigField struct {
 	Type        string `json:"type"`
 	Placeholder string `json:"placeholder,omitempty"`
 	Required    bool   `json:"required,omitempty"`
+
+	// Options 非空时按下拉框渲染, Type 写 select。
+	Options []string `json:"options,omitempty"`
+
+	// ShowIf 让字段只在另一字段取到指定值时才出现, 一份配置里放多套互斥参数时用。
+	ShowIf *ShowIf `json:"show_if,omitempty"`
+
+	// Default 是面板首次打开时的初始值; 布尔和文本框缺值本来就按空渲染, 只有下拉与依赖它的 ShowIf 判断需要它。
+	Default any `json:"default,omitempty"`
+}
+
+type ShowIf struct {
+	Key    string   `json:"key,omitempty"`
+	Values []string `json:"values,omitempty"`
+
+	// Any 是"任一成立就显示"的分支: 同一个平台被文字和图片分别选中时, 那套参数要能在两种情况下都出现。
+	Any []ShowIf `json:"any,omitempty"`
 }

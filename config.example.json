@@ -1,0 +1,70 @@
+{
+  "port": 8080,
+  "appid": "你的机器人AppID",
+  "secret": "你的机器人AppSecret",
+  "proxy": "https://api.bot.qq.com",
+  "gateway_url": "",
+  "protocol": "webhook",
+  "intents": [
+    "GROUP_AT_MESSAGE_CREATE",
+    "GROUP_MESSAGE_CREATE",
+    "C2C_MESSAGE_CREATE",
+    "INTERACTION_CREATE",
+    "GROUP_MEMBER_ADD",
+    "GROUP_MEMBER_REMOVE",
+    "MESSAGE_AUDIT_PASS",
+    "MESSAGE_AUDIT_REJECT"
+  ],
+  "database": "postgres://aurorix:密码@127.0.0.1:5432/aurorix?sslmode=disable",
+  "data_dir": "data",
+  "admin_password": "设置一个管理面板密码",
+  "global_markdown": false,
+  "image_limits_enabled": true,
+  "image_max_width": 350,
+  "image_max_height": 438,
+  "retry_when": [11253, 630006],
+  "upload_threshold": 3145728,
+  "log_level": "info",
+  "footer_buttons_enabled": true,
+  "footer_buttons": [
+    "+1 | repeat",
+    "帮助 | command | /help",
+    "文档 | link | https://example.com/docs , 使用说明 | image | https://example.com/guide.png"
+  ],
+  "bot_maintenance": false,
+  "bot_maintenance_message": "当前该功能模块正在维护中，请等待维护完成再重试",
+  "plugin_settings": {
+    "imagegen": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "你的API密钥",
+      "model_id": "gpt-image-1"
+    }
+  },
+  "plugin_access": {
+    "echo": {
+      "default": { "mode": "off" },
+      "deny": { "reply": true, "message": "这个插件只给群友用" },
+      "commands": {
+        "/random": { "mode": "off" },
+        "/uid": {
+          "mode": "blacklist",
+          "users": ["被禁的用户openid"],
+          "deny": { "reply": false }
+        }
+      }
+    },
+    "uptime": {
+      "default": { "mode": "off", "role": "admin" },
+      "commands": {
+        "/uptime": { "mode": "off", "role": "admin" }
+      }
+    },
+    "bind": {
+      "default": { "mode": "off" },
+      "disabled": false
+    },
+    "imagegen": {
+      "default": { "mode": "off" }
+    }
+  }
+}

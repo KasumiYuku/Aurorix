@@ -4,18 +4,27 @@ import (
 	"sync"
 )
 
-// 计数器
 type MsgRef struct {
-	msgSeq uint8
-	lock   sync.Mutex
+	sent  uint8
+	spent bool
+	lock  sync.Mutex
 }
 
+// Count 取下一个被动回复序号; 满 5 条之后一律报 ReplyMessageReachLimit, 调用方据此换主动通道。
 func (ref *MsgRef) Count() (uint8, error) {
 	ref.lock.Lock()
 	defer ref.lock.Unlock()
-	if ref.msgSeq == 5 {
+	if ref.spent || ref.sent >= 5 {
+		ref.spent = true
 		return 0, &ReplyMessageReachLimit{}
 	}
-	ref.msgSeq++
-	return ref.msgSeq - 1, nil
+	ref.sent++
+	return ref.sent, nil
+}
+
+// Spent 被动预算是否已经用光。
+func (ref *MsgRef) Spent() bool {
+	ref.lock.Lock()
+	defer ref.lock.Unlock()
+	return ref.spent
 }

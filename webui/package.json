@@ -1,0 +1,14 @@
+{
+  "name": "aurorix-webui",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "scripts": {
+    "dev": "pnpm --filter @aurorix/admin dev",
+    "build": "pnpm --filter @aurorix/admin build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

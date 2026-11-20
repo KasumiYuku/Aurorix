@@ -4,72 +4,64 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
+	"github.com/KasumiYuku/Aurorix/lib/logx"
 	"io"
-	"log"
 	"net/http"
 	"strings"
-
-	"github.com/gin-gonic/gin"
 )
 
-func VerifySignature(botSecret string) gin.HandlerFunc {
-	// 提前计算好公钥，避免每次请求重复计算
-	seed := botSecret
+var verifyLog = logx.New("verify")
+
+// DeriveEd25519Key 从 AppSecret 派生 QQ 签名密钥对。
+func DeriveEd25519Key(secret string) (ed25519.PublicKey, ed25519.PrivateKey) {
+	seed := secret
 	for len(seed) < ed25519.SeedSize {
-		seed = strings.Repeat(seed, 2)
+		seed += seed
 	}
-	rand := strings.NewReader(seed[:ed25519.SeedSize])
-	publicKey, _, err := ed25519.GenerateKey(rand)
-	if err != nil {
-		log.Fatalf("初始化公钥失败: %v", err)
-	}
+	reader := strings.NewReader(seed[:ed25519.SeedSize])
+	pub, priv, _ := ed25519.GenerateKey(reader)
+	return pub, priv
+}
 
-	return func(c *gin.Context) {
-		// 主动推送接口不走QQ签名校验
-		if strings.HasPrefix(c.Request.URL.Path, "/push/") {
-			c.Next()
-			return
-		}
+// VerifySignature 包装下一个 handler, 对 QQ 回调做 ed25519 验签。
+func VerifySignature(botSecret string) func(http.Handler) http.Handler {
+	pub, _ := DeriveEd25519Key(botSecret)
 
-		// 获取 Header 参数
-		signature := c.GetHeader("X-Signature-Ed25519")
-		timestamp := c.GetHeader("X-Signature-Timestamp")
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			signature := r.Header.Get("X-Signature-Ed25519")
+			timestamp := r.Header.Get("X-Signature-Timestamp")
 
-		if signature == "" || timestamp == "" {
-			log.Println("[签名校验失败] 缺少签名字段")
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
+			if signature == "" || timestamp == "" {
+				verifyLog.Warnf("签名校验失败: 缺少签名字段")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 
-		// 解码签名
-		sig, err := hex.DecodeString(signature)
-		if err != nil || len(sig) != ed25519.SignatureSize || sig[63]&224 != 0 {
-			log.Println("[签名校验失败] 签名格式不合法")
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
+			sig, err := hex.DecodeString(signature)
+			if err != nil || len(sig) != ed25519.SignatureSize || sig[63]&224 != 0 {
+				verifyLog.Warnf("签名校验失败: 签名格式不合法")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 
-		// 读取Body并重写
-		bodyBytes, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			c.AbortWithStatus(http.StatusBadRequest)
-			return
-		}
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-		// log.Printf("[Debug]Raw request: %v", string(bodyBytes))
-		// 拼接签名体
-		var msg bytes.Buffer
-		msg.WriteString(timestamp)
-		msg.Write(bodyBytes)
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			var msg bytes.Buffer
+			msg.WriteString(timestamp)
+			msg.Write(bodyBytes)
 
-		// 校验签名
-		if !ed25519.Verify(publicKey, msg.Bytes(), sig) {
-			log.Println("[签名校验失败] 签名验证不通过，可能遭遇伪造请求")
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
+			if !ed25519.Verify(pub, msg.Bytes(), sig) {
+				verifyLog.Warnf("签名校验失败: 签名验证不通过，可能遭遇伪造请求")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 
-		// 校验通过，继续后面的路由逻辑
-		c.Next()
+			next.ServeHTTP(w, r)
+		})
 	}
 }

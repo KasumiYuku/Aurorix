@@ -1,0 +1,29 @@
+import { QueryClient } from '@tanstack/react-query'
+import type { LogFilter } from './types'
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 10_000,
+    },
+  },
+})
+
+export const qk = {
+  me: ['me'] as const,
+  overview: ['overview'] as const,
+  logs: (filter: LogFilter) => ['logs', filter] as const,
+  plugins: ['plugins'] as const,
+  plugin: (id: string) => ['plugins', id] as const,
+  assets: ['assets'] as const,
+  jobs: ['jobs'] as const,
+  config: ['config'] as const,
+  menu: ['menu', 'panels'] as const,
+  menuMeta: ['menu', 'meta'] as const,
+  menuSnapshots: ['menu', 'snapshots'] as const,
+  inboxConversations: ['inbox', 'conversations'] as const,
+  inboxMessages: (conv: string) => ['inbox', 'messages', conv] as const,
+  bans: ['bans'] as const,
+}

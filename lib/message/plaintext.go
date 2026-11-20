@@ -1,37 +1,56 @@
 package message
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/KasumiYuku/Aurorix/lib/constant"
+	"github.com/KasumiYuku/Aurorix/lib/templates"
+)
 
 type TextMessage struct {
 	*Message
-	TextContent string `json:"content"`
+	TextContent  string `json:"content"`
+	MarkdownMode bool   `json:"-"`
 }
 
-// 设置内容
 func (msg *TextMessage) Content(content string) *TextMessage {
 	msg.TextContent = content
 	return msg
 }
 
-// 实现CanMarshal
+// Marshal 序列化。MarkdownMode 是全局 markdown 开关的产物, 频道域没有 markdown 通道, 这个开关在那里不生效。
 func (msg *TextMessage) Marshal() ([]byte, error) {
+	if msg.MarkdownMode && !msg.Target.Scene.Guild() {
+		content := ProtectMarkdownAt(msg.TextContent)
+		if msg.Qapi != nil && msg.Qapi.Assets != nil {
+			content = msg.Qapi.Assets.ProcessMarkdownTo(content, msg.Target)
+		}
+		content = msg.fitImages(content)
+		type mdMsg struct {
+			*Message
+			Type     constant.MessageType `json:"msg_type"`
+			Markdown templates.Markdown   `json:"markdown"`
+		}
+		return json.Marshal(mdMsg{
+			Message:  msg.Message,
+			Type:     constant.Markdown,
+			Markdown: templates.Markdown{Content: content},
+		})
+	}
 	return json.Marshal(msg)
 }
 
-// 初始化Message结构体
+func (*TextMessage) part() {}
+
+// Init 初始化 Message 结构体。
 func (msg *TextMessage) Init() {
 	var metamsg *Message
-	// 初始化新的Messgae
 	if msg.Message == nil {
 		metamsg = &Message{}
 		metamsg.InitRef()
 	} else {
-		// 已有, 重用
 		metamsg = msg.Message
 	}
-	// 建立Marshal接口传递
 	metamsg.MarshalInterface = msg
-	// 储存Message指针
 	msg.Message = metamsg
 }
 
